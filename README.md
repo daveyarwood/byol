@@ -1,0 +1,1 @@
+Tracking my progress here as I read/work through [Build Your Own Lisp](http://buildyourownlisp.com), which is guiding me through the process of building a Lisp in C. This book is awesome, you should read it.
