@@ -29,16 +29,24 @@ void add_history(char* unused) {}
 typedef struct {
   int type;
   long num;
+  double dbl;
   int err;
 } lval;
 
-enum { LVAL_NUM, LVAL_ERR };
-enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
+enum { LVAL_NUM, LVAL_DBL, LVAL_ERR };
+enum { LERR_DIV_ZERO, LERR_MOD_DBL, LERR_BAD_OP, LERR_BAD_NUM };
 
 lval lval_num(long x) {
   lval v;
   v.type = LVAL_NUM;
   v.num  = x;
+  return v;
+}
+
+lval lval_dbl(double x) {
+  lval v;
+  v.type = LVAL_DBL;
+  v.dbl  = x;
   return v;
 }
 
@@ -54,10 +62,16 @@ void lval_print(lval v) {
     case LVAL_NUM:
       printf("%li", v.num);
       break;
+    case LVAL_DBL:
+      printf("%f", v.dbl);
+      break;
     case LVAL_ERR:
       switch (v.err) {
         case LERR_DIV_ZERO:
           printf("Error: division by zero");
+          break;
+        case LERR_MOD_DBL:
+          printf("Error: can't use modulo operator on doubles");
           break;
         case LERR_BAD_OP:
           printf("Error: invalid operator");
@@ -75,13 +89,176 @@ void lval_println(lval v) {
   putchar('\n');
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
+lval lval_add(lval x, lval y) {
+  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
+    return lval_num(x.num + y.num);
+  }
+
+  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
+    return lval_dbl(x.num + y.dbl);
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
+    return lval_dbl(x.dbl + y.num);
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
+    return lval_dbl(x.dbl + y.dbl);
+  }
+
+  // we should never get this far
+  lval empty;
+  return empty;
+}
+
+lval lval_subtract(lval x, lval y) {
+  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
+    return lval_num(x.num - y.num);
+  }
+
+  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
+    return lval_dbl(x.num - y.dbl);
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
+    return lval_dbl(x.dbl - y.num);
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
+    return lval_dbl(x.dbl - y.dbl);
+  }
+
+  // we should never get this far
+  lval empty;
+  return empty;
+}
+
+lval lval_multiply(lval x, lval y) {
+  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
+    return lval_num(x.num * y.num);
+  }
+
+  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
+    return lval_dbl(x.num * y.dbl);
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
+    return lval_dbl(x.dbl * y.num);
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
+    return lval_dbl(x.dbl * y.dbl);
+  }
+
+  // we should never get this far
+  lval empty;
+  return empty;
+}
+
 lval lval_divide(lval x, lval y) {
-  if (y.num == 0) {
+  if ((y.type == LVAL_NUM && y.num == 0) ||
+      (y.type == LVAL_DBL && y.dbl == 0.0)) {
     return lval_err(LERR_DIV_ZERO);
-  } else {
+  }
+
+  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
     return lval_num(x.num / y.num);
   }
+
+  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
+    return lval_dbl(x.num / y.dbl);
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
+    return lval_dbl(x.dbl / y.num);
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
+    return lval_dbl(x.dbl / y.dbl);
+  }
+
+  // we should never get this far
+  lval empty;
+  return empty;
 }
+
+lval lval_mod(lval x, lval y) {
+  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
+    return lval_num(x.num % y.num);
+  } else {
+    return lval_err(LERR_MOD_DBL);
+  }
+}
+
+lval lval_pow(lval x, lval y) {
+  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
+    return lval_num(pow(x.num, y.num));
+  }
+
+  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
+    return lval_dbl(pow(x.num, y.dbl));
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
+    return lval_dbl(pow(x.dbl, y.num));
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
+    return lval_dbl(pow(x.dbl, y.dbl));
+  }
+
+  // we should never get this far
+  lval empty;
+  return empty;
+}
+
+lval lval_min(lval x, lval y) {
+  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
+    return x.num < y.num ? x : y;
+  }
+
+  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
+    return x.num < y.dbl ? x : y;
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
+    return x.dbl < y.num ? x : y;
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
+    return x.dbl < y.dbl ? x : y;
+  }
+
+  // we should never get this far
+  lval empty;
+  return empty;
+}
+
+lval lval_max(lval x, lval y) {
+  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
+    return x.num > y.num ? x : y;
+  }
+
+  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
+    return x.num > y.dbl ? x : y;
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
+    return x.dbl > y.num ? x : y;
+  }
+
+  if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
+    return x.dbl > y.dbl ? x : y;
+  }
+
+  // we should never get this far
+  lval empty;
+  return empty;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 /* Use operator string to see which operation to perform */
 lval eval_op(lval x, char* op, lval y) {
@@ -90,20 +267,20 @@ lval eval_op(lval x, char* op, lval y) {
   if (y.type == LVAL_ERR) { return y; }
 
   /* Otherwise, do some math on the number values. */
-  if (strcmp(op, "+") == 0) { return lval_num(x.num + y.num); }
-  if (strcmp(op, "-") == 0) { return lval_num(x.num - y.num); }
-  if (strcmp(op, "*") == 0) { return lval_num(x.num * y.num); }
+  if (strcmp(op, "+") == 0) { return lval_add(x, y); }
+  if (strcmp(op, "-") == 0) { return lval_subtract(x, y); }
+  if (strcmp(op, "*") == 0) { return lval_multiply(x, y); }
   if (strcmp(op, "/") == 0) { return lval_divide(x, y); }
-  if (strcmp(op, "%") == 0) { return lval_num(x.num % y.num); }
-  if (strcmp(op, "^") == 0) { return lval_num(pow(x.num, y.num)); }
-  if (strcmp(op, "add") == 0) { return lval_num(x.num + y.num); }
-  if (strcmp(op, "sub") == 0) { return lval_num(x.num - y.num); }
-  if (strcmp(op, "mul") == 0) { return lval_num(x.num * y.num); }
+  if (strcmp(op, "%") == 0) { return lval_mod(x, y); }
+  if (strcmp(op, "^") == 0) { return lval_pow(x, y); }
+  if (strcmp(op, "add") == 0) { return lval_add(x, y); }
+  if (strcmp(op, "sub") == 0) { return lval_subtract(x, y); }
+  if (strcmp(op, "mul") == 0) { return lval_multiply(x, y); }
   if (strcmp(op, "div") == 0) { return lval_divide(x, y); }
-  if (strcmp(op, "mod") == 0) { return lval_num(x.num % y.num); }
-  if (strcmp(op, "pow") == 0) { return lval_num(pow(x.num, y.num)); }
-  if (strcmp(op, "min") == 0) { return x.num < y.num ? x : y; }
-  if (strcmp(op, "max") == 0) { return x.num > y.num ? x : y; }
+  if (strcmp(op, "mod") == 0) { return lval_mod(x, y); }
+  if (strcmp(op, "pow") == 0) { return lval_pow(x, y); }
+  if (strcmp(op, "min") == 0) { return lval_min(x, y); }
+  if (strcmp(op, "max") == 0) { return lval_max(x, y); }
 
   /* If we've gotten this far, the operator is invalid */
   return lval_err(LERR_BAD_OP);
@@ -112,7 +289,7 @@ lval eval_op(lval x, char* op, lval y) {
 /* Evaluate a parse tree */
 lval eval(mpc_ast_t* t) {
   if (strstr(t->tag, "number")) {
-    /* Check to see if there is some error parsing the number as a number */
+    /* Check to see if there is some error parsing the number as a long */
     errno = 0;
     long x = strtol(t->contents, NULL, 10);
     if (errno == ERANGE) {
@@ -122,11 +299,23 @@ lval eval(mpc_ast_t* t) {
     }
   }
 
+  if (strstr(t->tag, "double")) {
+    /* Check to see if there is some error parsing the number as a double */
+    errno = 0;
+    double x = strtod(t->contents, NULL);
+    if (errno == ERANGE) {
+      return lval_err(LERR_BAD_NUM);
+    } else {
+      return lval_dbl(x);
+    }
+  }
+
   /* The operator is always the second child. */
   char* op = t->children[1]->contents;
 
   /* Determine the initial value based on the operator. */
   lval x;
+  x.type = LVAL_NUM;
   int i = 2;
   if (strcmp(op, "+") == 0) { x.num = 0; }
   else if (strcmp(op, "-") == 0) { x.num = 0; }
@@ -153,20 +342,22 @@ lval eval(mpc_ast_t* t) {
 
 int main(int argc, char** argv) {
   mpc_parser_t* Number    = mpc_new("number");
+  mpc_parser_t* Double    = mpc_new("double");
   mpc_parser_t* Operator  = mpc_new("operator");
   mpc_parser_t* Expr      = mpc_new("expr");
   mpc_parser_t* Lispy     = mpc_new("lispy");
 
   mpca_lang(MPCA_LANG_DEFAULT,
     "                                                                        \
-      number   : /-?[0-9]+(\\.[0-9]+)?/ ;                                    \
+      number   : /-?[0-9]+/ ;                                                \
+      double   : /-?[0-9]+\\.[0-9]+/ ;                                       \
       operator : '+' | '-' | '*' | '/' | '%' | '^'                           \
                | \"add\" | \"sub\" | \"mul\" | \"div\" | \"mod\" | \"pow\"   \
                | \"min\" | \"max\" ;                                         \
-      expr     : <number> | '(' <operator> <expr>+ ')' ;                     \
+      expr     : <double> | <number> | '(' <operator> <expr>+ ')' ;          \
       lispy    : /^/ <operator> <expr>+ /$/ ;                                \
     ",
-    Number, Operator, Expr, Lispy);
+    Number, Double, Operator, Expr, Lispy);
 
   puts("Lispy Version 0.0.0.0.1");
   puts("Press Ctrl+c to Exit\n");
@@ -191,7 +382,7 @@ int main(int argc, char** argv) {
     free(input);
   }
 
-  mpc_cleanup(4, Number, Operator, Expr, Lispy);
+  mpc_cleanup(5, Number, Double, Operator, Expr, Lispy);
 
   return 0;
 }
