@@ -28,18 +28,18 @@ void add_history(char* unused) {}
 
 typedef struct {
   int type;
-  long num;
+  long lng;
   double dbl;
   int err;
 } lval;
 
-enum { LVAL_NUM, LVAL_DBL, LVAL_ERR };
+enum { LVAL_LONG, LVAL_DBL, LVAL_ERR };
 enum { LERR_DIV_ZERO, LERR_MOD_DBL, LERR_BAD_OP, LERR_BAD_NUM };
 
-lval lval_num(long x) {
+lval lval_long(long x) {
   lval v;
-  v.type = LVAL_NUM;
-  v.num  = x;
+  v.type = LVAL_LONG;
+  v.lng  = x;
   return v;
 }
 
@@ -59,8 +59,8 @@ lval lval_err(int x) {
 
 void lval_print(lval v) {
   switch (v.type) {
-    case LVAL_NUM:
-      printf("%li", v.num);
+    case LVAL_LONG:
+      printf("%li", v.lng);
       break;
     case LVAL_DBL:
       printf("%f", v.dbl);
@@ -92,16 +92,16 @@ void lval_println(lval v) {
 ////////////////////////////////////////////////////////////////////////////////
 
 lval lval_add(lval x, lval y) {
-  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
-    return lval_num(x.num + y.num);
+  if (x.type == LVAL_LONG && y.type == LVAL_LONG) {
+    return lval_long(x.lng + y.lng);
   }
 
-  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
-    return lval_dbl(x.num + y.dbl);
+  if (x.type == LVAL_LONG && y.type == LVAL_DBL) {
+    return lval_dbl(x.lng + y.dbl);
   }
 
-  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
-    return lval_dbl(x.dbl + y.num);
+  if (x.type == LVAL_DBL && y.type == LVAL_LONG) {
+    return lval_dbl(x.dbl + y.lng);
   }
 
   if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
@@ -114,16 +114,16 @@ lval lval_add(lval x, lval y) {
 }
 
 lval lval_subtract(lval x, lval y) {
-  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
-    return lval_num(x.num - y.num);
+  if (x.type == LVAL_LONG && y.type == LVAL_LONG) {
+    return lval_long(x.lng - y.lng);
   }
 
-  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
-    return lval_dbl(x.num - y.dbl);
+  if (x.type == LVAL_LONG && y.type == LVAL_DBL) {
+    return lval_dbl(x.lng - y.dbl);
   }
 
-  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
-    return lval_dbl(x.dbl - y.num);
+  if (x.type == LVAL_DBL && y.type == LVAL_LONG) {
+    return lval_dbl(x.dbl - y.lng);
   }
 
   if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
@@ -136,16 +136,16 @@ lval lval_subtract(lval x, lval y) {
 }
 
 lval lval_multiply(lval x, lval y) {
-  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
-    return lval_num(x.num * y.num);
+  if (x.type == LVAL_LONG && y.type == LVAL_LONG) {
+    return lval_long(x.lng * y.lng);
   }
 
-  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
-    return lval_dbl(x.num * y.dbl);
+  if (x.type == LVAL_LONG && y.type == LVAL_DBL) {
+    return lval_dbl(x.lng * y.dbl);
   }
 
-  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
-    return lval_dbl(x.dbl * y.num);
+  if (x.type == LVAL_DBL && y.type == LVAL_LONG) {
+    return lval_dbl(x.dbl * y.lng);
   }
 
   if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
@@ -158,21 +158,21 @@ lval lval_multiply(lval x, lval y) {
 }
 
 lval lval_divide(lval x, lval y) {
-  if ((y.type == LVAL_NUM && y.num == 0) ||
+  if ((y.type == LVAL_LONG && y.lng == 0) ||
       (y.type == LVAL_DBL && y.dbl == 0.0)) {
     return lval_err(LERR_DIV_ZERO);
   }
 
-  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
-    return lval_num(x.num / y.num);
+  if (x.type == LVAL_LONG && y.type == LVAL_LONG) {
+    return lval_long(x.lng / y.lng);
   }
 
-  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
-    return lval_dbl(x.num / y.dbl);
+  if (x.type == LVAL_LONG && y.type == LVAL_DBL) {
+    return lval_dbl(x.lng / y.dbl);
   }
 
-  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
-    return lval_dbl(x.dbl / y.num);
+  if (x.type == LVAL_DBL && y.type == LVAL_LONG) {
+    return lval_dbl(x.dbl / y.lng);
   }
 
   if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
@@ -185,24 +185,24 @@ lval lval_divide(lval x, lval y) {
 }
 
 lval lval_mod(lval x, lval y) {
-  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
-    return lval_num(x.num % y.num);
+  if (x.type == LVAL_LONG && y.type == LVAL_LONG) {
+    return lval_long(x.lng % y.lng);
   } else {
     return lval_err(LERR_MOD_DBL);
   }
 }
 
 lval lval_pow(lval x, lval y) {
-  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
-    return lval_num(pow(x.num, y.num));
+  if (x.type == LVAL_LONG && y.type == LVAL_LONG) {
+    return lval_long(pow(x.lng, y.lng));
   }
 
-  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
-    return lval_dbl(pow(x.num, y.dbl));
+  if (x.type == LVAL_LONG && y.type == LVAL_DBL) {
+    return lval_dbl(pow(x.lng, y.dbl));
   }
 
-  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
-    return lval_dbl(pow(x.dbl, y.num));
+  if (x.type == LVAL_DBL && y.type == LVAL_LONG) {
+    return lval_dbl(pow(x.dbl, y.lng));
   }
 
   if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
@@ -215,16 +215,16 @@ lval lval_pow(lval x, lval y) {
 }
 
 lval lval_min(lval x, lval y) {
-  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
-    return x.num < y.num ? x : y;
+  if (x.type == LVAL_LONG && y.type == LVAL_LONG) {
+    return x.lng < y.lng ? x : y;
   }
 
-  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
-    return x.num < y.dbl ? x : y;
+  if (x.type == LVAL_LONG && y.type == LVAL_DBL) {
+    return x.lng < y.dbl ? x : y;
   }
 
-  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
-    return x.dbl < y.num ? x : y;
+  if (x.type == LVAL_DBL && y.type == LVAL_LONG) {
+    return x.dbl < y.lng ? x : y;
   }
 
   if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
@@ -237,16 +237,16 @@ lval lval_min(lval x, lval y) {
 }
 
 lval lval_max(lval x, lval y) {
-  if (x.type == LVAL_NUM && y.type == LVAL_NUM) {
-    return x.num > y.num ? x : y;
+  if (x.type == LVAL_LONG && y.type == LVAL_LONG) {
+    return x.lng > y.lng ? x : y;
   }
 
-  if (x.type == LVAL_NUM && y.type == LVAL_DBL) {
-    return x.num > y.dbl ? x : y;
+  if (x.type == LVAL_LONG && y.type == LVAL_DBL) {
+    return x.lng > y.dbl ? x : y;
   }
 
-  if (x.type == LVAL_DBL && y.type == LVAL_NUM) {
-    return x.dbl > y.num ? x : y;
+  if (x.type == LVAL_DBL && y.type == LVAL_LONG) {
+    return x.dbl > y.lng ? x : y;
   }
 
   if (x.type == LVAL_DBL && y.type == LVAL_DBL) {
@@ -288,19 +288,19 @@ lval eval_op(lval x, char* op, lval y) {
 
 /* Evaluate a parse tree */
 lval eval(mpc_ast_t* t) {
-  if (strstr(t->tag, "number")) {
-    /* Check to see if there is some error parsing the number as a long */
+  if (strstr(t->tag, "long")) {
+    /* Check to see if there is some error parsing as a long */
     errno = 0;
     long x = strtol(t->contents, NULL, 10);
     if (errno == ERANGE) {
       return lval_err(LERR_BAD_NUM);
     } else {
-      return lval_num(x);
+      return lval_long(x);
     }
   }
 
   if (strstr(t->tag, "double")) {
-    /* Check to see if there is some error parsing the number as a double */
+    /* Check to see if there is some error parsing as a double */
     errno = 0;
     double x = strtod(t->contents, NULL);
     if (errno == ERANGE) {
@@ -315,16 +315,16 @@ lval eval(mpc_ast_t* t) {
 
   /* Determine the initial value based on the operator. */
   lval x;
-  x.type = LVAL_NUM;
+  x.type = LVAL_LONG;
   int i = 2;
-  if (strcmp(op, "+") == 0) { x.num = 0; }
-  else if (strcmp(op, "-") == 0) { x.num = 0; }
-  else if (strcmp(op, "*") == 0) { x.num = 1; }
-  else if (strcmp(op, "add") == 0) { x.num = 0; }
-  else if (strcmp(op, "sub") == 0) { x.num = 0; }
-  else if (strcmp(op, "mul") == 0) { x.num = 1; }
-  else if (strcmp(op, "min") == 0) { x.num = LONG_MAX; }
-  else if (strcmp(op, "max") == 0) { x.num = LONG_MIN; }
+  if (strcmp(op, "+") == 0) { x.lng = 0; }
+  else if (strcmp(op, "-") == 0) { x.lng = 0; }
+  else if (strcmp(op, "*") == 0) { x.lng = 1; }
+  else if (strcmp(op, "add") == 0) { x.lng = 0; }
+  else if (strcmp(op, "sub") == 0) { x.lng = 0; }
+  else if (strcmp(op, "mul") == 0) { x.lng = 1; }
+  else if (strcmp(op, "min") == 0) { x.lng = LONG_MAX; }
+  else if (strcmp(op, "max") == 0) { x.lng = LONG_MIN; }
   /* For these operators, the initial value is the first argument. */
   else if (strcmp(op, "/") == 0) { x = eval(t->children[2]); i = 3; }
   else if (strcmp(op, "%") == 0) { x = eval(t->children[2]); i = 3; }
@@ -341,7 +341,7 @@ lval eval(mpc_ast_t* t) {
 }
 
 int main(int argc, char** argv) {
-  mpc_parser_t* Number    = mpc_new("number");
+  mpc_parser_t* Long      = mpc_new("long");
   mpc_parser_t* Double    = mpc_new("double");
   mpc_parser_t* Operator  = mpc_new("operator");
   mpc_parser_t* Expr      = mpc_new("expr");
@@ -349,15 +349,15 @@ int main(int argc, char** argv) {
 
   mpca_lang(MPCA_LANG_DEFAULT,
     "                                                                        \
-      number   : /-?[0-9]+/ ;                                                \
+      long     : /-?[0-9]+/ ;                                                \
       double   : /-?[0-9]+\\.[0-9]+/ ;                                       \
       operator : '+' | '-' | '*' | '/' | '%' | '^'                           \
                | \"add\" | \"sub\" | \"mul\" | \"div\" | \"mod\" | \"pow\"   \
                | \"min\" | \"max\" ;                                         \
-      expr     : <double> | <number> | '(' <operator> <expr>+ ')' ;          \
+      expr     : <double> | <long> | '(' <operator> <expr>+ ')' ;            \
       lispy    : /^/ <operator> <expr>+ /$/ ;                                \
     ",
-    Number, Double, Operator, Expr, Lispy);
+    Long, Double, Operator, Expr, Lispy);
 
   puts("Lispy Version 0.0.0.0.1");
   puts("Press Ctrl+c to Exit\n");
@@ -382,7 +382,7 @@ int main(int argc, char** argv) {
     free(input);
   }
 
-  mpc_cleanup(5, Number, Double, Operator, Expr, Lispy);
+  mpc_cleanup(5, Long, Double, Operator, Expr, Lispy);
 
   return 0;
 }
