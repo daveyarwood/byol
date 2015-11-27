@@ -2,6 +2,8 @@
 #include <limits.h>
 #include "mpc.h"
 
+////////////////////////////////////////////////////////////////////////////////
+
 #ifdef _WIN32
 #include <string.h>
 static char buffer[2048];
@@ -26,6 +28,20 @@ void add_history(char* unused) {}
 
 ////////////////////////////////////////////////////////////////////////////////
 
+#define LASSERT(lval, cond, err) \
+  if (!(cond)) { lval_del(lval); return lval_err(err); }
+
+#define LASSERT_ONE_ARG(lval, err) \
+  LASSERT(a, a->count == 1, err);
+
+#define LASSERT_QEXPR(lval, err) \
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR, err);
+
+#define LASSERT_NOT_EMPTY(lval, err) \
+  LASSERT(a, a->cell[0]->count != 0, err);
+
+////////////////////////////////////////////////////////////////////////////////
+
 typedef struct lval {
   int type;
   long lng;
@@ -36,7 +52,7 @@ typedef struct lval {
   struct lval** cell;
 } lval;
 
-enum { LVAL_LONG, LVAL_DBL, LVAL_ERR, LVAL_SYM, LVAL_SEXPR };
+enum { LVAL_LONG, LVAL_DBL, LVAL_ERR, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR };
 
 lval* lval_long(long x) {
   lval* v = malloc(sizeof(lval));
@@ -76,6 +92,14 @@ lval* lval_sexpr(void) {
   return v;
 }
 
+lval* lval_qexpr(void) {
+  lval* v  = malloc(sizeof(lval));
+  v->type  = LVAL_QEXPR;
+  v->count = 0;
+  v->cell  = NULL;
+  return v;
+}
+
 lval* lval_conj(lval* sexp, lval* x) {
   sexp->count++;
   sexp->cell = realloc(sexp->cell, sizeof(lval*) * sexp->count);
@@ -90,8 +114,9 @@ void lval_del(lval* v) {
     // for errors and symbols, free the string data
     case LVAL_ERR: free(v->err); break;
     case LVAL_SYM: free(v->sym); break;
-    // for sexprs, delete all the elements inside
+    // for S/Q-expressions, delete all the elements inside
     case LVAL_SEXPR:
+    case LVAL_QEXPR:
       for (int i = 0; i < v->count; i++) {
         lval_del(v->cell[i]);
       }
@@ -130,6 +155,15 @@ lval* lval_take(lval* sexp, int i) {
   return x;
 }
 
+lval* lval_join(lval* x, lval* y) {
+  while (y->count) {
+    x = lval_conj(x, lval_pop(y, 0));
+  }
+
+  lval_del(y);
+  return x;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 void lval_expr_print(lval* v, char open, char close);
@@ -141,6 +175,7 @@ void lval_print(lval* v) {
     case LVAL_ERR:   printf("Error: %s", v->err); break;
     case LVAL_SYM:   printf("%s", v->sym); break;
     case LVAL_SEXPR: lval_expr_print(v, '(', ')'); break;
+    case LVAL_QEXPR: lval_expr_print(v, '{', '}'); break;
   }
 }
 
@@ -307,6 +342,63 @@ void lval_max(lval** x, lval* y) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+lval* builtin_head(lval* a) {
+  LASSERT_ONE_ARG(a, "There must be only one argument to 'head'.");
+  LASSERT_QEXPR(a, "The argument to 'head' must be a Q-expression.");
+  LASSERT_NOT_EMPTY(a, "Can't take the 'head' of an empty Q-expression.");
+
+  lval* v = lval_take(a, 0);
+  while (v->count > 1) { lval_del(lval_pop(v, 1)); }
+  return v;
+}
+
+lval* builtin_tail(lval* a) {
+  LASSERT_ONE_ARG(a, "There must be only one argument to 'tail'.");
+  LASSERT_QEXPR(a, "The argument to 'tail' must be a Q-expression.");
+  LASSERT_NOT_EMPTY(a, "Can't take the 'tail' of an empty Q-expression.");
+
+  lval* v = lval_take(a, 0);
+  lval_del(lval_pop(v, 0));
+  return v;
+}
+
+lval* builtin_list(lval* a) {
+  a->type = LVAL_QEXPR;
+  return a;
+}
+
+lval* lval_eval(lval* v);
+
+lval* builtin_eval(lval* a) {
+  LASSERT(a, a->count == 1,
+    "There must be only one argument to 'eval'.");
+
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+    "The argument to 'eval' must be a Q-expression.");
+
+  lval* x = lval_take(a, 0);
+  x->type = LVAL_SEXPR;
+  return lval_eval(x);
+}
+
+lval* builtin_join(lval* a) {
+  for (int i = 0; i < a->count; i++) {
+    LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
+      "The arguments to 'join' must be Q-expressions.");
+  }
+
+  lval* x = lval_pop(a, 0);
+
+  while (a->count) {
+    x = lval_join(x, lval_pop(a, 0));
+  }
+
+  lval_del(a);
+  return x;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 lval* builtin_op(lval* a, char* op) {
   /* Ensure all arguments are numbers */
   for (int i = 0; i < a->count; i++) {
@@ -357,7 +449,20 @@ lval* builtin_op(lval* a, char* op) {
   return x;
 }
 
-lval* lval_eval(lval* v);
+lval* builtin(lval* a, char* func) {
+  if (strcmp("list", func) == 0) { return builtin_list(a); }
+  if (strcmp("head", func) == 0) { return builtin_head(a); }
+  if (strcmp("tail", func) == 0) { return builtin_tail(a); }
+  if (strcmp("join", func) == 0) { return builtin_join(a); }
+  if (strcmp("eval", func) == 0) { return builtin_eval(a); }
+  if (strstr("+-*/%^addsubmuldivmodpowminmax", func)) {
+    return builtin_op(a, func);
+  }
+
+  /* If we've gotten this far, the function is invalid. */
+  lval_del(a);
+  return lval_err("Unknown function.");
+}
 
 lval* lval_eval_sexpr(lval* v) {
   /* Evaluate children */
@@ -392,7 +497,7 @@ lval* lval_eval_sexpr(lval* v) {
   }
 
   /* Call first element as a built-in operator */
-  lval* result = builtin_op(v, f->sym);
+  lval* result = builtin(v, f->sym);
   lval_del(f);
   return result;
 }
@@ -437,10 +542,11 @@ lval* lval_read(mpc_ast_t* t) {
   if (strstr(t->tag, "double")) { return lval_read_double(t);   }
   if (strstr(t->tag, "symbol")) { return lval_sym(t->contents); }
 
-  // if root (>) or sexpr, then create an empty list...
+  // if root (>) or s/qexpr, then create an empty list...
   lval* sexp = NULL;
   if (strcmp(t->tag, ">") == 0) { sexp = lval_sexpr(); }
   if (strstr(t->tag, "sexpr"))  { sexp = lval_sexpr(); }
+  if (strstr(t->tag, "qexpr"))  { sexp = lval_qexpr(); }
 
   // ...and fill it with any valid expression contained within
   for (int i = 0; i < t->children_num; i++) {
@@ -462,6 +568,7 @@ int main(int argc, char** argv) {
   mpc_parser_t* Double    = mpc_new("double");
   mpc_parser_t* Symbol    = mpc_new("symbol");
   mpc_parser_t* Sexpr     = mpc_new("sexpr");
+  mpc_parser_t* Qexpr     = mpc_new("qexpr");
   mpc_parser_t* Expr      = mpc_new("expr");
   mpc_parser_t* Lispy     = mpc_new("lispy");
 
@@ -471,12 +578,14 @@ int main(int argc, char** argv) {
       double   : /-?[0-9]+\\.[0-9]+/ ;                                       \
       symbol   : '+' | '-' | '*' | '/' | '%' | '^'                           \
                | \"add\" | \"sub\" | \"mul\" | \"div\" | \"mod\" | \"pow\"   \
-               | \"min\" | \"max\" ;                                         \
+               | \"min\" | \"max\"                                           \
+               | \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\" ;      \
       sexpr    : '(' <expr>* ')' ;                                           \
-      expr     : <double> | <long> | <symbol> | <sexpr> ;                    \
+      qexpr    : '{' <expr>* '}' ;                                           \
+      expr     : <double> | <long> | <symbol> | <sexpr> | <qexpr>;           \
       lispy    : /^/ <expr>* /$/ ;                                           \
     ",
-    Long, Double, Symbol, Sexpr, Expr, Lispy);
+    Long, Double, Symbol, Sexpr, Qexpr, Expr, Lispy);
 
   puts("Lispy Version 0.0.0.0.1");
   puts("Press Ctrl+c to Exit\n");
@@ -502,7 +611,7 @@ int main(int argc, char** argv) {
     free(input);
   }
 
-  mpc_cleanup(6, Long, Double, Symbol, Sexpr, Expr, Lispy);
+  mpc_cleanup(7, Long, Double, Symbol, Sexpr, Qexpr, Expr, Lispy);
 
   return 0;
 }
