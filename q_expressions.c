@@ -34,6 +34,9 @@ void add_history(char* unused) {}
 #define LASSERT_ONE_ARG(lval, err) \
   LASSERT(a, a->count == 1, err);
 
+#define LASSERT_N_ARGS(lval, n, err) \
+  LASSERT(a, a->count == n, err);
+
 #define LASSERT_QEXPR(lval, err) \
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR, err);
 
@@ -162,6 +165,20 @@ lval* lval_join(lval* x, lval* y) {
 
   lval_del(y);
   return x;
+}
+
+lval* lval_cons(lval* x, lval* sexp) {
+  /*
+   * This is probably inefficient, but whatevs.
+   * Also, it doesn't work if x is a qexpr for some reason.
+   *
+   * ¯\_(ツ)_/¯
+   */
+  lval* new_sexp = lval_qexpr();
+  new_sexp = lval_conj(new_sexp, x);
+  new_sexp = lval_join(new_sexp, sexp);
+  lval_del(x);
+  return new_sexp;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -362,6 +379,16 @@ lval* builtin_tail(lval* a) {
   return v;
 }
 
+lval* builtin_init(lval* a) {
+  LASSERT_ONE_ARG(a, "There must be only one argument to 'init'.");
+  LASSERT_QEXPR(a, "The argument to 'init' must be a Q-expression.");
+  LASSERT_NOT_EMPTY(a, "Can't take the 'init' of an empty Q-expression.");
+
+  lval* v = lval_take(a, 0);
+  lval_del(lval_pop(v, v->count - 1));
+  return v;
+}
+
 lval* builtin_list(lval* a) {
   a->type = LVAL_QEXPR;
   return a;
@@ -370,11 +397,8 @@ lval* builtin_list(lval* a) {
 lval* lval_eval(lval* v);
 
 lval* builtin_eval(lval* a) {
-  LASSERT(a, a->count == 1,
-    "There must be only one argument to 'eval'.");
-
-  LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-    "The argument to 'eval' must be a Q-expression.");
+  LASSERT_ONE_ARG(a, "There must be only one argument to 'eval'.");
+  LASSERT_QEXPR(a, "The argument to 'eval' must be a Q-expression.");
 
   lval* x = lval_take(a, 0);
   x->type = LVAL_SEXPR;
@@ -395,6 +419,31 @@ lval* builtin_join(lval* a) {
 
   lval_del(a);
   return x;
+}
+
+lval* builtin_cons(lval* a) {
+  LASSERT_N_ARGS(a, 2,
+    "There must be two arguments to 'cons'.");
+
+  LASSERT(a, a->cell[1]->type == LVAL_QEXPR,
+    "The second argument to 'cons' must be a Q-expression.");
+
+  lval* x = lval_pop(a, 0);
+  x = lval_cons(x, lval_pop(a, 0));
+
+  lval_del(a);
+  return x;
+}
+
+lval* builtin_len(lval* a) {
+  LASSERT_ONE_ARG(a, "There must be only one arg to 'len'.");
+  LASSERT_QEXPR(a, "The argument to 'len' must be a Q-expression.")
+
+  lval* qexp = lval_pop(a, 0);
+
+  int l = qexp->count;
+  lval_del(a);
+  return lval_long(l);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -455,6 +504,9 @@ lval* builtin(lval* a, char* func) {
   if (strcmp("tail", func) == 0) { return builtin_tail(a); }
   if (strcmp("join", func) == 0) { return builtin_join(a); }
   if (strcmp("eval", func) == 0) { return builtin_eval(a); }
+  if (strcmp("cons", func) == 0) { return builtin_cons(a); }
+  if (strcmp("len", func)  == 0) { return builtin_len(a); }
+  if (strcmp("init", func) == 0) { return builtin_init(a); }
   if (strstr("+-*/%^addsubmuldivmodpowminmax", func)) {
     return builtin_op(a, func);
   }
@@ -579,7 +631,8 @@ int main(int argc, char** argv) {
       symbol   : '+' | '-' | '*' | '/' | '%' | '^'                           \
                | \"add\" | \"sub\" | \"mul\" | \"div\" | \"mod\" | \"pow\"   \
                | \"min\" | \"max\"                                           \
-               | \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\" ;      \
+               | \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\"        \
+               | \"cons\" | \"len\" | \"init\" ;                             \
       sexpr    : '(' <expr>* ')' ;                                           \
       qexpr    : '{' <expr>* '}' ;                                           \
       expr     : <double> | <long> | <symbol> | <sexpr> | <qexpr>;           \
