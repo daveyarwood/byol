@@ -45,17 +45,30 @@ void add_history(char* unused) {}
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef struct lval {
+struct lval;
+struct lenv;
+typedef struct lval lval;
+typedef struct lenv lenv;
+
+enum { LVAL_ERR, LVAL_LONG, LVAL_DBL, LVAL_SYM,
+       LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR };
+
+typedef lval*(*lbuiltin)(lenv*, lval*);
+
+struct lval {
   int type;
+
   long lng;
   double dbl;
   char* err;
   char* sym;
-  int count;
-  struct lval** cell;
-} lval;
+  lbuiltin fn;
 
-enum { LVAL_LONG, LVAL_DBL, LVAL_ERR, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR };
+  int count;
+  lval** cell;
+};
+
+////////////////////////////////////////////////////////////////////////////////
 
 lval* lval_long(long x) {
   lval* v = malloc(sizeof(lval));
@@ -103,17 +116,50 @@ lval* lval_qexpr(void) {
   return v;
 }
 
-lval* lval_conj(lval* sexp, lval* x) {
-  sexp->count++;
-  sexp->cell = realloc(sexp->cell, sizeof(lval*) * sexp->count);
-  sexp->cell[sexp->count - 1] = x;
-  return sexp;
+lval* lval_fn(lbuiltin fn) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_FN;
+  v->fn   = fn;
+  return v;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+lval* lval_copy(lval* v) {
+  lval* x = malloc(sizeof(lval));
+  x->type = v->type;
+
+  switch (v->type) {
+    /* Copy functions and numbers directly */
+    case LVAL_FN: x->fn = v->fn; break;
+    case LVAL_LONG: x->lng = v->lng; break;
+    case LVAL_DBL: x->dbl = v->dbl; break;
+
+    /* Copy strings using malloc and strcpy */
+    case LVAL_ERR:
+      x->err = malloc(strlen(v->err) + 1);
+      strcpy(x->err, v->err); break;
+
+    /* Copy lists by copying each sub-expression */
+    case LVAL_SEXPR:
+    case LVAL_QEXPR:
+      x->count = v->count;
+      x->cell  = malloc(sizeof(lval*) * x->count);
+      for (int i = 0; i < x->count; i++) {
+        x->cell[i] = lval_copy(v->cell[i]);
+      }
+    break;
+  }
+  return x;
 }
 
 void lval_del(lval* v) {
   switch (v->type) {
-    // do nothing special for numbers
-    case LVAL_LONG: case LVAL_DBL: break;
+    // do nothing special for numbers and fn pointers
+    case LVAL_LONG:
+    case LVAL_DBL:
+    case LVAL_FN:
+      break;
     // for errors and symbols, free the string data
     case LVAL_ERR: free(v->err); break;
     case LVAL_SYM: free(v->sym); break;
@@ -130,6 +176,13 @@ void lval_del(lval* v) {
     // free the memory allocated for the lval struct itself
     free(v);
   }
+}
+
+lval* lval_conj(lval* sexp, lval* x) {
+  sexp->count++;
+  sexp->cell = realloc(sexp->cell, sizeof(lval*) * sexp->count);
+  sexp->cell[sexp->count - 1] = x;
+  return sexp;
 }
 
 /*
@@ -193,6 +246,7 @@ void lval_print(lval* v) {
     case LVAL_SYM:   printf("%s", v->sym); break;
     case LVAL_SEXPR: lval_expr_print(v, '(', ')'); break;
     case LVAL_QEXPR: lval_expr_print(v, '{', '}'); break;
+    case LVAL_FN:    printf("<function>"); break;
   }
 }
 
@@ -628,11 +682,7 @@ int main(int argc, char** argv) {
     "                                                                        \
       long     : /-?[0-9]+/ ;                                                \
       double   : /-?[0-9]+\\.[0-9]+/ ;                                       \
-      symbol   : '+' | '-' | '*' | '/' | '%' | '^'                           \
-               | \"add\" | \"sub\" | \"mul\" | \"div\" | \"mod\" | \"pow\"   \
-               | \"min\" | \"max\"                                           \
-               | \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\"        \
-               | \"cons\" | \"len\" | \"init\" ;                             \
+      symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;                          \
       sexpr    : '(' <expr>* ')' ;                                           \
       qexpr    : '{' <expr>* '}' ;                                           \
       expr     : <double> | <long> | <symbol> | <sexpr> | <qexpr>;           \
