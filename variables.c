@@ -129,34 +129,6 @@ lval* lval_fn(lbuiltin fn) {
   return v;
 }
 
-lval* lval_copy(lval* v) {
-  lval* x = malloc(sizeof(lval));
-  x->type = v->type;
-
-  switch (v->type) {
-    /* Copy functions and numbers directly */
-    case LVAL_FN: x->fn = v->fn; break;
-    case LVAL_LONG: x->lng = v->lng; break;
-    case LVAL_DBL: x->dbl = v->dbl; break;
-
-    /* Copy strings using malloc and strcpy */
-    case LVAL_ERR:
-      x->err = malloc(strlen(v->err) + 1);
-      strcpy(x->err, v->err); break;
-
-    /* Copy lists by copying each sub-expression */
-    case LVAL_SEXPR:
-    case LVAL_QEXPR:
-      x->count = v->count;
-      x->cell  = malloc(sizeof(lval*) * x->count);
-      for (int i = 0; i < x->count; i++) {
-        x->cell[i] = lval_copy(v->cell[i]);
-      }
-    break;
-  }
-  return x;
-}
-
 void lval_del(lval* v) {
   switch (v->type) {
     // do nothing special for numbers and fn pointers
@@ -180,6 +152,38 @@ void lval_del(lval* v) {
     // free the memory allocated for the lval struct itself
     free(v);
   }
+}
+
+lval* lval_copy(lval* v) {
+  lval* x = malloc(sizeof(lval));
+  x->type = v->type;
+
+  switch (v->type) {
+    /* Copy functions and numbers directly */
+    case LVAL_FN: x->fn = v->fn; break;
+    case LVAL_LONG: x->lng = v->lng; break;
+    case LVAL_DBL: x->dbl = v->dbl; break;
+
+    /* Copy strings using malloc and strcpy */
+    case LVAL_ERR:
+      x->err = malloc(strlen(v->err) + 1);
+      strcpy(x->err, v->err); break;
+
+    case LVAL_SYM:
+      x->sym = malloc(strlen(v->sym) + 1);
+      strcpy(x->sym, v->sym); break;
+
+    /* Copy lists by copying each sub-expression */
+    case LVAL_SEXPR:
+    case LVAL_QEXPR:
+      x->count = v->count;
+      x->cell  = malloc(sizeof(lval*) * x->count);
+      for (int i = 0; i < x->count; i++) {
+        x->cell[i] = lval_copy(v->cell[i]);
+      }
+    break;
+  }
+  return x;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -423,13 +427,40 @@ lval* builtin_cons(lenv* e, lval* a) {
 
 lval* builtin_len(lenv* e, lval* a) {
   LASSERT_ONE_ARG(a, "There must be only one arg to 'len'.");
-  LASSERT_QEXPR(a, "The argument to 'len' must be a Q-expression.")
+  LASSERT_QEXPR(a, "The argument to 'len' must be a Q-expression.");
 
   lval* qexp = lval_pop(a, 0);
 
   int l = qexp->count;
   lval_del(a);
   return lval_long(l);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+lval* builtin_def(lenv* e, lval* a) {
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+    "The first argument to 'def' must be a Q-expression.");
+
+  /* The first argument to 'def' is a list of symbols */
+  lval* syms = a->cell[0];
+
+  for (int i = 0; i < syms->count; i++) {
+    LASSERT(a, syms->cell[i]->type == LVAL_SYM,
+      "The first argument to 'def' must be a list of symbols.");
+  }
+
+  LASSERT(a, syms->count == a->count - 1,
+    "The number of symbols defined by 'def' must be equal to the number of "
+    "values.");
+
+  for (int i = 0; i < syms->count; i++) {
+    lenv_put(e, syms->cell[i], a->cell[i+1]);
+  }
+
+  lval_del(a);
+  // return an empty sexp ()
+  return lval_sexpr();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -686,6 +717,9 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "pow", builtin_pow);
   lenv_add_builtin(e, "min", builtin_min);
   lenv_add_builtin(e, "max", builtin_max);
+
+  /* Variable functions */
+  lenv_add_builtin(e, "def", builtin_def);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
