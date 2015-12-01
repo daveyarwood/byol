@@ -499,6 +499,16 @@ lval* builtin_def(lenv* e, lval* a) {
   return lval_sexpr();
 }
 
+lval* builtin_print_env(lenv* e, lval* a) {
+  for (int i = 0; i < e->count; i++) {
+    printf("%s: ", e->syms[i]);
+    lval_println(e->vals[i]);
+  }
+
+  // return an empty sexp ()
+  return lval_sexpr();
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -752,6 +762,7 @@ void lenv_add_builtins(lenv* e) {
 
   /* Variable functions */
   lenv_add_builtin(e, "def", builtin_def);
+  lenv_add_builtin(e, "print-env", builtin_print_env);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
