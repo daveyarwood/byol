@@ -509,6 +509,15 @@ lval* builtin_print_env(lenv* e, lval* a) {
   return lval_sexpr();
 }
 
+lval* builtin_exit(lenv* e, lval* a) {
+  printf("Adiós!");
+  putchar('\n');
+  exit(0);
+
+  // return an empty sexp () to appease the compiler
+  return lval_sexpr();
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -763,6 +772,9 @@ void lenv_add_builtins(lenv* e) {
   /* Variable functions */
   lenv_add_builtin(e, "def", builtin_def);
   lenv_add_builtin(e, "print-env", builtin_print_env);
+
+  /* REPL functions */
+  lenv_add_builtin(e, "exit", builtin_exit);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -783,11 +795,6 @@ lval* lval_eval_sexpr(lenv* e, lval* v) {
   /* Empty expression */
   if (v->count == 0) {
     return v;
-  }
-
-  /* Single expression */
-  if (v->count == 1) {
-    return lval_take(v, 0);
   }
 
   /* Ensure first element is a function */
@@ -854,9 +861,16 @@ lval* lval_read(mpc_ast_t* t) {
   if (strstr(t->tag, "double")) { return lval_read_double(t);   }
   if (strstr(t->tag, "symbol")) { return lval_sym(t->contents); }
 
-  // if root (>) or s/qexpr, then create an empty list...
+  // if root (>), read the last child (ignoring any others)
+  if (strcmp(t->tag, ">") == 0) {
+    // t->children_num - 1 is some sort of regex, which causes an address
+    // boundary error. t->children_num - 2 is what we really want.
+    mpc_ast_t* last_child = t->children[t->children_num - 2];
+    return lval_read(last_child);
+  }
+
+  // if sexpr or qexpr, then create an empty list...
   lval* sexp = NULL;
-  if (strcmp(t->tag, ">") == 0) { sexp = lval_sexpr(); }
   if (strstr(t->tag, "sexpr"))  { sexp = lval_sexpr(); }
   if (strstr(t->tag, "qexpr"))  { sexp = lval_qexpr(); }
 
