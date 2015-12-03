@@ -41,12 +41,19 @@ typedef lval*(*lbuiltin)(lenv*, lval*);
 struct lval {
   int type;
 
+  /* Basic */
   long lng;
   double dbl;
   char* err;
   char* sym;
-  lbuiltin fn;
 
+  /* Function */
+  lbuiltin builtin; // when not NULL, this is a builtin fn
+  lenv* env;
+  lval* args;
+  lval* body;
+
+  /* Expression */
   int count;
   lval** cell;
 };
@@ -131,19 +138,43 @@ lval* lval_qexpr(void) {
   return v;
 }
 
-lval* lval_fn(lbuiltin fn) {
+lval* lval_fn(lbuiltin builtin) {
+  lval* v    = malloc(sizeof(lval));
+  v->type    = LVAL_FN;
+  v->builtin = builtin;
+  return v;
+}
+
+lenv* lenv_new(void);
+lenv* lenv_copy(lenv* e);
+void lenv_del(lenv* e);
+
+lval* lval_lambda(lval* args, lval* body) {
   lval* v = malloc(sizeof(lval));
+
   v->type = LVAL_FN;
-  v->fn   = fn;
+  v->builtin = NULL;
+  v->env = lenv_new();
+  v->args = args;
+  v->body = body;
+
   return v;
 }
 
 void lval_del(lval* v) {
   switch (v->type) {
-    // do nothing special for numbers and fn pointers
+    // do nothing special for numbers
     case LVAL_LONG:
     case LVAL_DBL:
+      break;
+    // for fns, nothing special needs to be done if it's a builtin;
+    // if it's a user-defined fn, free the associated data
     case LVAL_FN:
+      if (!v->builtin) {
+        lenv_del(v->env);
+        lval_del(v->args);
+        lval_del(v->body);
+      }
       break;
     // for errors and symbols, free the string data
     case LVAL_ERR: free(v->err); break;
@@ -168,10 +199,20 @@ lval* lval_copy(lval* v) {
   x->type = v->type;
 
   switch (v->type) {
-    /* Copy functions and numbers directly */
-    case LVAL_FN: x->fn = v->fn; break;
+    /* Copy numbers directly */
     case LVAL_LONG: x->lng = v->lng; break;
     case LVAL_DBL: x->dbl = v->dbl; break;
+
+    case LVAL_FN:
+      if (v->builtin) {
+        x->builtin = v->builtin;
+      } else {
+        x->builtin = NULL;
+        x->env = lenv_copy(v->env);
+        x->args = lval_copy(v->args);
+        x->body = lval_copy(v->body);
+      }
+      break;
 
     /* Copy strings using malloc and strcpy */
     case LVAL_ERR:
@@ -331,7 +372,17 @@ void lval_print(lval* v) {
     case LVAL_SYM:   printf("%s", v->sym); break;
     case LVAL_SEXPR: lval_expr_print(v, '(', ')'); break;
     case LVAL_QEXPR: lval_expr_print(v, '{', '}'); break;
-    case LVAL_FN:    printf("<function>"); break;
+    case LVAL_FN:
+      if (v->builtin) {
+        printf("<builtin>");
+      } else {
+        printf("(\\ ");
+        lval_print(v->args);
+        putchar(' ');
+        lval_print(v->body);
+        putchar(')');
+      }
+      break;
   }
 }
 
@@ -734,9 +785,9 @@ lval* builtin_max(lenv* e, lval* a) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void lenv_add_builtin(lenv* e, char* name, lbuiltin fn) {
+void lenv_add_builtin(lenv* e, char* name, lbuiltin builtin) {
   lval* k = lval_sym(name);
-  lval* v = lval_fn(fn);
+  lval* v = lval_fn(builtin);
   lenv_put(e, k, v);
   lval_del(k);
   lval_del(v);
@@ -809,7 +860,7 @@ lval* lval_eval_sexpr(lenv* e, lval* v) {
    * Call the function on the arguments (remaining children) to get the
    * result.
    */
-  lval* result = f->fn(e, v);
+  lval* result = f->builtin(e, v);
   lval_del(f);
   return result;
 }
