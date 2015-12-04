@@ -560,6 +560,26 @@ lval* builtin_print_env(lenv* e, lval* a) {
   return lval_sexpr();
 }
 
+lval* builtin_lambda(lenv* e, lval* a) {
+  LASSERT_NUM("\\", a, 2);
+  LASSERT_TYPE("\\", a, 0, LVAL_QEXPR);
+  LASSERT_TYPE("\\", a, 1, LVAL_QEXPR);
+
+  for (int i = 0; i < a->cell[0]->count; i++) {
+    LASSERT(a, (a->cell[0]->cell[i]->type == LVAL_SYM),
+      "The first argument to '\\' must be a list of symbols. "
+      "Got %s, expected %s.",
+      ltype_name(a->cell[0]->cell[i]->type),
+      ltype_name(LVAL_SYM));
+  }
+
+  lval* args = lval_pop(a, 0);
+  lval* body = lval_pop(a, 0);
+  lval_del(a);
+
+  return lval_lambda(args, body);
+}
+
 lval* builtin_exit(lenv* e, lval* a) {
   printf("Adiós!");
   putchar('\n');
