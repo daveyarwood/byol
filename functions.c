@@ -72,6 +72,7 @@ char* ltype_name(int t) {
 }
 
 struct lenv {
+  lenv* parent;
   int count;
   char** syms;
   lval** vals;
@@ -298,6 +299,7 @@ lval* lval_cons(lval* x, lval* sexp) {
 
 lenv* lenv_new(void) {
   lenv* e = malloc(sizeof(lenv));
+  e->parent = NULL;
   e->count = 0;
   e->syms = NULL;
   e->vals = NULL;
@@ -314,6 +316,20 @@ void lenv_del(lenv* e) {
   free(e);
 }
 
+lenv* lenv_copy(lenv* e) {
+  lenv* n   = malloc(sizeof(lenv));
+  n->parent = e->parent;
+  n->count  = e->count;
+  n->syms   = malloc(sizeof(char*) * n->count);
+  n->vals   = malloc(sizeof(lval*) * n->count);
+  for (int i = 0; i < e->count; i++) {
+    n->syms[i] = malloc(strlen(e->syms[i]) + 1);
+    strcpy(n->syms[i], e->syms[i]);
+    n->vals[i] = lval_copy(e->vals[i]);
+  }
+  return n;
+}
+
 lval* lenv_get(lenv* e, lval* k) {
   /* Iterate over all items stored in the environment */
   for (int i = 0; i < e->count; i++) {
@@ -325,10 +341,19 @@ lval* lenv_get(lenv* e, lval* k) {
     }
   }
 
-  /* If the symbol is not defined, return an error. */
+  /*
+   * If the symbol is not defined in the environment itself, tcheck its parent
+   * environment.
+   */
+  if (e->parent) {
+    return lenv_get(e->parent, k);
+  }
+
+  /* If the symbol is not defined anywhere, return an error. */
   return lval_err("unbound symbol: '%s'", k->sym);
 }
 
+/* Defines a value in the local environment. */
 void lenv_put(lenv* e, lval* k, lval* v) {
   /*
    * Iterate over all items stored in the environment to see if the key already
@@ -358,6 +383,12 @@ void lenv_put(lenv* e, lval* k, lval* v) {
   e->syms[e->count-1] = malloc(strlen(k->sym) + 1);
   strcpy(e->syms[e->count-1], k->sym);
   e->vals[e->count-1] = lval_copy(v);
+}
+
+/* Defines a value in the global environment. */
+void lenv_def(lenv* e, lval* k, lval* v) {
+  while (e->parent) { e = e->parent; }
+  lenv_put(e, k, v);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -523,31 +554,46 @@ lval* builtin_len(lenv* e, lval* a) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-lval* builtin_def(lenv* e, lval* a) {
-  /* The first argument to 'def' is a list of symbols */
-  LASSERT_TYPE("def", a, 0, LVAL_QEXPR);
-  lval* syms = a->cell[0];
+lval* builtin_var(lenv* e, lval* a, char* fn) {
+  LASSERT_TYPE(fn, a, 0, LVAL_QEXPR);
 
+  lval* syms = a->cell[0];
   for (int i = 0; i < syms->count; i++) {
     LASSERT(a, syms->cell[i]->type == LVAL_SYM,
-      "The first argument to 'def' must be a list of symbols. "
+      "The first argument to '%s' must be a list of symbols. "
       "Got %s, expected %s.",
+      fn,
       ltype_name(syms->cell[i]->type),
       ltype_name(LVAL_SYM));
   }
 
   LASSERT(a, syms->count == a->count - 1,
-    "The number of symbols defined by 'def' must be equal to the number of "
+    "The number of symbols defined by '%s' must be equal to the number of "
     "values. Got %i, expected %i.",
-    syms->count, a->count - 1);
+    fn, syms->count, a->count - 1);
 
   for (int i = 0; i < syms->count; i++) {
-    lenv_put(e, syms->cell[i], a->cell[i+1]);
+    /* If fn is 'def', define globally; if '=' (put), define locally */
+    if (strcmp(fn, "def") == 0) {
+      lenv_def(e, syms->cell[i], a->cell[i+1]);
+    }
+
+    if (strcmp(fn, "=") == 0) {
+      lenv_put(e, syms->cell[i], a->cell[i+1]);
+    }
   }
 
   lval_del(a);
   // return an empty sexp ()
   return lval_sexpr();
+}
+
+lval* builtin_def(lenv* e, lval* a) {
+  return builtin_var(e, a, "def");
+}
+
+lval* builtin_put(lenv* e, lval* a) {
+  return builtin_var(e, a, "=");
 }
 
 lval* builtin_print_env(lenv* e, lval* a) {
@@ -842,6 +888,7 @@ void lenv_add_builtins(lenv* e) {
 
   /* Variable functions */
   lenv_add_builtin(e, "def", builtin_def);
+  lenv_add_builtin(e, "=", builtin_put);
   lenv_add_builtin(e, "print-env", builtin_print_env);
 
   /* REPL functions */
