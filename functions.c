@@ -891,8 +891,57 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "=", builtin_put);
   lenv_add_builtin(e, "print-env", builtin_print_env);
 
+  /* Function functions */
+  lenv_add_builtin(e, "\\", builtin_lambda);
+
   /* REPL functions */
   lenv_add_builtin(e, "exit", builtin_exit);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+lval* lval_call(lenv* e, lval* f, lval* a) {
+  /* If f is a builtin, simply call it as usual */
+  if (f->builtin) { return f->builtin(e, a); }
+
+  // Otherwise...
+
+  /* Record argument counts */
+  int given = a->count;
+  int total = f->args->count;
+
+  /* While there are still args to process... */
+  while (a->count) {
+    /* If we've run out of args to bind... */
+    if (f->args->count == 0) {
+      lval_del(a); return lval_err(
+        "Function passed too many arguments. "
+        "Got %i, expected %i.", given, total);
+    }
+
+    /* Pop the first value and bind it to the first argument */
+    lval* sym = lval_pop(f->args, 0);
+    lval* val = lval_pop(a, 0);
+    lenv_put(f->env, sym, val);
+
+    lval_del(sym);
+    lval_del(val);
+
+  }
+
+  lval_del(a);
+
+  /* If all of the args have been bound... */
+  if (f->args->count == 0) {
+    /* Set the parent environment to the evaluation environment */
+    f->env->parent = e;
+
+    /* Evaluate and return */
+    return builtin_eval(f->env, lval_conj(lval_sexpr(), lval_copy(f->body)));
+  }
+
+  /* Otherwise, return a partially evaluated function */
+  return lval_copy(f);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -918,16 +967,21 @@ lval* lval_eval_sexpr(lenv* e, lval* v) {
   /* Ensure first element is a function */
   lval* f = lval_pop(v, 0);
   if (f->type != LVAL_FN) {
+    lval* err = lval_err(
+      "S-expression starts with incorrect type. "
+      "Got %s, expected %s.",
+      ltype_name(f->type), ltype_name(LVAL_FN));
+
     lval_del(f);
     lval_del(v);
-    return lval_err("S-expression does not start with a function.");
+    return err;
   }
 
   /*
    * Call the function on the arguments (remaining children) to get the
    * result.
    */
-  lval* result = f->builtin(e, v);
+  lval* result = lval_call(e, f, v);
   lval_del(f);
   return result;
 }
