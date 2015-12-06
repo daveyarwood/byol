@@ -1033,12 +1033,21 @@ lval* lval_read(mpc_ast_t* t) {
   if (strstr(t->tag, "double")) { return lval_read_double(t);   }
   if (strstr(t->tag, "symbol")) { return lval_sym(t->contents); }
 
-  // if root (>), read the last child (ignoring any others)
+  // if root (>), read the last child (ignoring any others).
+  //
+  // t->children_num - 1 is some sort of regex (probably \$\), which causes an
+  // address boundary error. t->children_num - 2 is what we really want.
+  //
+  // if t->children_num - 2 is a regex too (probably \^\), then we assume this
+  // is an empty line and return an empty S-expression as a result
   if (strcmp(t->tag, ">") == 0) {
-    // t->children_num - 1 is some sort of regex, which causes an address
-    // boundary error. t->children_num - 2 is what we really want.
     mpc_ast_t* last_child = t->children[t->children_num - 2];
-    return lval_read(last_child);
+
+    if (strcmp(last_child->tag, "regex") == 0) {
+      return lval_sexpr();
+    } else {
+      return lval_read(last_child);
+    }
   }
 
   // if sexpr or qexpr, then create an empty list...
