@@ -919,8 +919,26 @@ lval* lval_call(lenv* e, lval* f, lval* a) {
         "Got %i, expected %i.", given, total);
     }
 
-    /* Pop the first value and bind it to the first argument */
     lval* sym = lval_pop(f->args, 0);
+
+    /* Special case to deal with '&' */
+    if (strcmp(sym->sym, "&") == 0) {
+      /* Ensure '&' is followed by another symbol */
+      if (f->args->count != 1) {
+        lval_del(a);
+        return lval_err(
+          "Function format invalid. "
+          "Symbol '&' not followed by a single symbol.");
+      }
+
+      /* Bind the next symbol to the list of remaining arguments. */
+      lval* next_sym = lval_pop(f->args, 0);
+      lenv_put(f->env, next_sym, builtin_list(e, a));
+      lval_del(sym);
+      lval_del(next_sym);
+      break;
+    }
+
     lval* val = lval_pop(a, 0);
     lenv_put(f->env, sym, val);
 
@@ -930,6 +948,28 @@ lval* lval_call(lenv* e, lval* f, lval* a) {
   }
 
   lval_del(a);
+
+  /* If '&' remains in the argument list, bind the next thing to an empty list */
+  if (f->args->count > 0 && strcmp(f->args->cell[0]->sym, "&") == 0) {
+    /* Ensure that there IS a next thing */
+    if (f->args->count != 2) {
+      return lval_err(
+        "Function format invalid. "
+        "Symbol '&' not followed by a single symbol.");
+    }
+
+    /* Pop and delete the '&' symbol */
+    lval_del(lval_pop(f->args, 0));
+
+    /* Pop the next symbol and create an empty list */
+    lval* sym = lval_pop(f->args, 0);
+    lval* val = lval_qexpr();
+
+    /* Bind to environment and delete */
+    lenv_put(f->env, sym, val);
+    lval_del(sym);
+    lval_del(val);
+  }
 
   /* If all of the args have been bound... */
   if (f->args->count == 0) {
