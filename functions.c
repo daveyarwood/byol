@@ -1108,6 +1108,18 @@ lval* lval_read(mpc_ast_t* t) {
   return sexp;
 }
 
+void run_lispy_code(char* input_string, mpc_parser_t *parser, lenv* env) {
+  mpc_result_t r;
+  if (mpc_parse("<stdin>", input_string, parser, &r)) {
+    lval* result = lval_eval(env, lval_read(r.output));
+    lval_del(result);
+    mpc_ast_delete(r.output);
+  } else {
+    mpc_err_print(r.error);
+    mpc_err_delete(r.error);
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv) {
@@ -1136,6 +1148,16 @@ int main(int argc, char** argv) {
 
   lenv* e = lenv_new();
   lenv_add_builtins(e);
+
+  /* Define additional builtins using Lispy syntax */
+  run_lispy_code("(def {def\\}"
+                 "  (\\ {args body}"
+                 "    {def (head args) (\\ (tail args) body)}))",
+                 Lispy, e);
+
+  run_lispy_code("(def\\ {apply f xs}"
+                 "  {eval (join (list f) xs)})",
+                 Lispy, e);
 
   while (1) {
     char* input = readline("lispy> ");
