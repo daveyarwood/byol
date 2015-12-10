@@ -469,6 +469,7 @@ void lval_expr_print(lval* v, char open, char close) {
   LASSERT(args, args->cell[index]->count != 0, \
     "Empty Q-expression passed to '%s' as argument #%i.", fn, index + 1);
 
+// Returns a Q-expression containing the first element in the list.
 lval* builtin_head(lenv* e, lval* a) {
   LASSERT_NUM("head", a, 1);
   LASSERT_TYPE("head", a, 0, LVAL_QEXPR);
@@ -476,6 +477,18 @@ lval* builtin_head(lenv* e, lval* a) {
 
   lval* v = lval_take(a, 0);
   while (v->count > 1) { lval_del(lval_pop(v, 1)); }
+  return v;
+}
+
+// Like head, but returns the element itself (not a Q-expression).
+lval* builtin_first(lenv* e, lval* a) {
+  LASSERT_NUM("first", a, 1);
+  LASSERT_TYPE("first", a, 0, LVAL_QEXPR);
+  LASSERT_NOT_EMPTY("first", a, 0);
+
+  lval* v = lval_take(a, 0);
+  while (v->count > 1) { lval_del(lval_pop(v, 1)); }
+  v = lval_take(v, 0);
   return v;
 }
 
@@ -862,7 +875,9 @@ void lenv_add_builtin(lenv* e, char* name, lbuiltin builtin) {
 void lenv_add_builtins(lenv* e) {
   /* List functions */
   lenv_add_builtin(e, "head", builtin_head);
+  lenv_add_builtin(e, "first", builtin_first);
   lenv_add_builtin(e, "tail", builtin_tail);
+  lenv_add_builtin(e, "rest", builtin_tail); // alias for `tail`
   lenv_add_builtin(e, "init", builtin_init);
   lenv_add_builtin(e, "list", builtin_list);
   lenv_add_builtin(e, "cons", builtin_cons);
@@ -1157,6 +1172,18 @@ int main(int argc, char** argv) {
 
   run_lispy_code("(def\\ {apply f xs}"
                  "  {eval (join (list f) xs)})",
+                 Lispy, e);
+
+  run_lispy_code("(def\\ {second xs}"
+                 "  {first (rest xs)})",
+                 Lispy, e);
+
+  run_lispy_code("(def\\ {third xs}"
+                 "  {first (rest (rest xs))})",
+                 Lispy, e);
+
+  run_lispy_code("(def\\ {fourth xs}"
+                 "  {first (rest (rest (rest xs)))})",
                  Lispy, e);
 
   while (1) {
