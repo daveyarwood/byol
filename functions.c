@@ -1186,6 +1186,10 @@ int main(int argc, char** argv) {
                  "  {first (rest (rest (rest xs)))})",
                  Lispy, e);
 
+  run_lispy_code("(def\\ {flip f x y}"
+                 "  {eval {f y x}})",
+                 Lispy, e);
+
   while (1) {
     char* input = readline("lispy> ");
     add_history(input);
