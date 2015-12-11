@@ -33,8 +33,8 @@ struct lenv;
 typedef struct lval lval;
 typedef struct lenv lenv;
 
-enum { LVAL_ERR, LVAL_LONG, LVAL_DBL, LVAL_SYM,
-       LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR };
+enum { LVAL_ERR, LVAL_LONG, LVAL_DBL, LVAL_BOOL,
+       LVAL_SYM, LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR };
 
 typedef lval*(*lbuiltin)(lenv*, lval*);
 
@@ -44,6 +44,7 @@ struct lval {
   /* Basic */
   long lng;
   double dbl;
+  int bl;
   char* err;
   char* sym;
 
@@ -63,6 +64,7 @@ char* ltype_name(int t) {
     case LVAL_ERR:   return "Error";
     case LVAL_LONG:  return "Long";
     case LVAL_DBL:   return "Double";
+    case LVAL_BOOL:  return "Boolean";
     case LVAL_SYM:   return "Symbol";
     case LVAL_FN:    return "Function";
     case LVAL_SEXPR: return "S-expression";
@@ -115,7 +117,29 @@ lval* lval_err(char* fmt, ...) {
   return v;
 }
 
+lval* lval_bool(int x) {
+  if (x != 0 && x != 1)
+  {
+    return lval_err("Cannot create boolean value from the number %d", x);
+  }
+
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_BOOL;
+  v->bl   = x;
+  return v;
+}
+
 lval* lval_sym(char* s) {
+  if (strstr(s, "true"))
+  {
+    return lval_bool(1);
+  }
+
+  if (strstr(s, "false"))
+  {
+    return lval_bool(0);
+  }
+
   lval* v = malloc(sizeof(lval));
   v->type = LVAL_SYM;
   v->sym  = malloc(strlen(s) + 1);
@@ -164,9 +188,10 @@ lval* lval_lambda(lval* args, lval* body) {
 
 void lval_del(lval* v) {
   switch (v->type) {
-    // do nothing special for numbers
+    // do nothing special for numbers / booleans
     case LVAL_LONG:
     case LVAL_DBL:
+    case LVAL_BOOL:
       break;
     // for fns, nothing special needs to be done if it's a builtin;
     // if it's a user-defined fn, free the associated data
@@ -200,9 +225,10 @@ lval* lval_copy(lval* v) {
   x->type = v->type;
 
   switch (v->type) {
-    /* Copy numbers directly */
+    /* Copy numbers and booleans directly */
     case LVAL_LONG: x->lng = v->lng; break;
     case LVAL_DBL: x->dbl = v->dbl; break;
+    case LVAL_BOOL: x->bl = v->bl; break;
 
     case LVAL_FN:
       if (v->builtin) {
@@ -399,6 +425,7 @@ void lval_print(lval* v) {
   switch (v->type) {
     case LVAL_LONG:  printf("%li", v->lng); break;
     case LVAL_DBL:   printf("%f", v->dbl); break;
+    case LVAL_BOOL:  printf(v->bl == 0 ? "false" : "true"); break;
     case LVAL_ERR:   printf("Error: %s", v->err); break;
     case LVAL_SYM:   printf("%s", v->sym); break;
     case LVAL_SEXPR: lval_expr_print(v, '(', ')'); break;
@@ -1150,7 +1177,7 @@ int main(int argc, char** argv) {
     "                                                                        \
       long     : /-?[0-9]+/ ;                                                \
       double   : /-?[0-9]+\\.[0-9]+/ ;                                       \
-      symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;                          \
+      symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&%]+/ ;                         \
       sexpr    : '(' <expr>* ')' ;                                           \
       qexpr    : '{' <expr>* '}' ;                                           \
       expr     : <double> | <long> | <symbol> | <sexpr> | <qexpr>;           \
