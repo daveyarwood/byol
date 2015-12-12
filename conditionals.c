@@ -813,6 +813,55 @@ lval* builtin_if(lenv* e, lval* a) {
   return result;
 }
 
+lval* builtin_or(lenv* e, lval* a) {
+  LASSERT_AT_LEAST_NUM("||", a, 1);
+  for (int i = 0; i < a->count; i++) {
+    LASSERT_TYPE("||", a, i, LVAL_BOOL);
+  }
+
+  int result = 0;
+  for (int i = 0; i < a->count; i++) {
+    if (a->cell[i]->bl) {
+      result = 1;
+      break;
+    }
+  }
+
+  lval_del(a);
+
+  return lval_bool(result);
+}
+
+lval* builtin_and(lenv* e, lval* a) {
+  LASSERT_AT_LEAST_NUM("&&", a, 1);
+  for (int i = 0; i < a->count; i++) {
+    LASSERT_TYPE("&&", a, i, LVAL_BOOL);
+  }
+
+  int result = 1;
+  for (int i = 0; i < a->count; i++) {
+    if (!a->cell[i]->bl) {
+      result = 0;
+      break;
+    }
+  }
+
+  lval_del(a);
+
+  return lval_bool(result);
+}
+
+lval* builtin_not(lenv* e, lval* a) {
+  LASSERT_NUM("!", a, 1);
+  LASSERT_TYPE("!", a, 0, LVAL_BOOL);
+
+  lval* this = lval_take(a, 0);
+  lval* that = lval_bool(!this->bl);
+
+  lval_del(this);
+  return that;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 lval* builtin_var(lenv* e, lval* a, char* fn) {
@@ -1157,6 +1206,9 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "<", builtin_lt);
   lenv_add_builtin(e, ">=", builtin_gte);
   lenv_add_builtin(e, "<=", builtin_lte);
+  lenv_add_builtin(e, "||", builtin_or);
+  lenv_add_builtin(e, "&&", builtin_and);
+  lenv_add_builtin(e, "!", builtin_not);
 
   /* Variable functions */
   lenv_add_builtin(e, "def", builtin_def);
@@ -1407,7 +1459,7 @@ int main(int argc, char** argv) {
     "                                                                        \
       long     : /-?[0-9]+/ ;                                                \
       double   : /-?[0-9]+\\.[0-9]+/ ;                                       \
-      symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&%]+/ ;                         \
+      symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&%\\|]+/ ;                         \
       sexpr    : '(' <expr>* ')' ;                                           \
       qexpr    : '{' <expr>* '}' ;                                           \
       expr     : <double> | <long> | <symbol> | <sexpr> | <qexpr>;           \
