@@ -739,10 +739,6 @@ lval* builtin_len(lenv* e, lval* a) {
 lval* builtin_compare(lenv* e, lval* a, char* op, int math, int invert) {
   /* There must be at least one argument. */
   LASSERT_AT_LEAST_NUM(op, a, 1);
-  /* If there is exactly one argument (e.g. (> 1)), return true */
-  if (a->count == 1) {
-    return lval_bool(1);
-  }
 
   /* If this is a mathematical comparison, then all args must be numbers */
   if (math) {
