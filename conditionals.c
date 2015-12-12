@@ -695,6 +695,9 @@ lval* builtin_eval(lenv* e, lval* a) {
 
 lval* builtin_join(lenv* e, lval* a) {
   for (int i = 0; i < a->count; i++) {
+    if (a->cell[i]->type == LVAL_SEXPR) {
+      a->cell[i]->type = LVAL_QEXPR;
+    }
     LASSERT_TYPE("join", a, i, LVAL_QEXPR);
   }
 
@@ -795,12 +798,12 @@ lval* builtin_if(lenv* e, lval* a) {
   lval* result;
 
   if (a->cell[0]->bl) {
-    if (a->cell[1]->type == LVAL_QEXPR) {
+    if (a->cell[1]->type == LVAL_QEXPR && a->cell[1]->count > 0) {
       a->cell[1]->type = LVAL_SEXPR;
     }
     result = lval_eval(e, lval_pop(a, 1));
   } else if (a->count == 3) {
-    if (a->cell[2]->type == LVAL_QEXPR) {
+    if (a->cell[2]->type == LVAL_QEXPR && a->cell[2]->count > 0) {
       a->cell[2]->type = LVAL_SEXPR;
     }
     result = lval_eval(e, lval_pop(a, 2));
@@ -1446,6 +1449,12 @@ int main(int argc, char** argv) {
 
   run_lispy_code("(def\\ {flip f x y}"
                  "  {eval {f y x}})",
+                 Lispy, e);
+
+  run_lispy_code("(def\\ {reverse coll}"
+                 "  {if (== coll {})"
+                 "    {}"
+                 "    {join (reverse (tail coll)) (head coll)}})",
                  Lispy, e);
 
   while (1) {
