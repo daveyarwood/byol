@@ -321,7 +321,56 @@ lval* lval_cons(lval* x, lval* sexp) {
   return new_sexp;
 }
 
+int lval_eq(lval* x, lval* y) {
+  if (x->type != y->type) { return 0; }
+
+  switch (x->type) {
+    case LVAL_LONG:
+      if (y->type == LVAL_LONG) { return x->lng == y->lng; }
+      if (y->type == LVAL_DBL)  { return x->lng == y->dbl; }
+
+    case LVAL_DBL:
+      if (y->type == LVAL_LONG) { return x->dbl == y->lng; }
+      if (y->type == LVAL_DBL)  { return x->dbl == y->dbl; }
+
+    case LVAL_ERR:
+      return strcmp(x->err, y->err) == 0;
+
+    case LVAL_SYM:
+      return strcmp(x->sym, y->sym) == 0;
+
+    case LVAL_FN:
+      if (x->builtin || y->builtin) {
+        return x->builtin == y->builtin;
+      } else {
+        return lval_eq(x->args, y->args) &&
+               lval_eq(x->body, y->body);
+      }
+
+    case LVAL_SEXPR:
+    case LVAL_QEXPR:
+      if (x->count != y->count) { return 0; }
+      for (int i = 0; i < x->count; i++) {
+        if (!lval_eq(x->cell[i], y->cell[i])) { return 0; }
+      }
+      return 1;
+    break;
+  }
+
+  // we should never get this far
+  return -1;
+}
+
+
 int lval_compare(lval* x, lval* y, char* op) {
+  if (strcmp(op, "==") == 0) {
+    return lval_eq(x, y);
+  }
+
+  if (strcmp(op, "!=") == 0) {
+    return !lval_eq(x, y);
+  }
+
   if (strcmp(op, ">") == 0) {
     if(x->type == LVAL_LONG && y->type == LVAL_LONG) {
       return x->lng > y->lng;
@@ -394,7 +443,7 @@ int lval_compare(lval* x, lval* y, char* op) {
     }
   }
 
-  // we should never get this far... return -1, I guess
+  // we should never get this far
   return -1;
 }
 
@@ -564,13 +613,13 @@ void lval_expr_print(lval* v, char open, char close) {
 
 #define LASSERT_TYPE(fn, args, index, expect) \
   LASSERT(args, args->cell[index]->type == expect, \
-    "Incorrect type for argument #%i passed to '%s.' Got %s, expected %s.", \
+    "Incorrect type for argument #%i passed to '%s'. Got %s, expected %s.", \
     index + 1, fn, ltype_name(args->cell[index]->type), ltype_name(expect))
 
 #define LASSERT_NUMBER_TYPE(fn, args, index) \
   LASSERT(args, (args->cell[index]->type == LVAL_LONG) || \
                 (args->cell[index]->type == LVAL_DBL), \
-    "Incorrect type for argument #%i passed to '%s.' " \
+    "Incorrect type for argument #%i passed to '%s'. " \
     "Got %s, expected %s or %s.", \
     index + 1, fn, ltype_name(args->cell[index]->type), \
     ltype_name(LVAL_LONG), ltype_name(LVAL_DBL))
@@ -676,7 +725,9 @@ lval* builtin_len(lenv* e, lval* a) {
   return lval_long(l);
 }
 
-lval* builtin_ord(lenv* e, lval* a, char* op) {
+////////////////////////////////////////////////////////////////////////////////
+
+lval* builtin_compare(lenv* e, lval* a, char* op, int math, int invert) {
   /* There must be at least one argument. */
   LASSERT_AT_LEAST_NUM(op, a, 1);
   /* If there is exactly one argument (e.g. (> 1)), return true */
@@ -684,9 +735,11 @@ lval* builtin_ord(lenv* e, lval* a, char* op) {
     return lval_bool(1);
   }
 
-  /* All args must be numbers */
-  for (int i = 0; i < a->count; i++) {
-    LASSERT_NUMBER_TYPE(op, a, i);
+  /* If this is a mathematical comparison, then all args must be numbers */
+  if (math) {
+    for (int i = 0; i < a->count; i++) {
+      LASSERT_NUMBER_TYPE(op, a, i);
+    }
   }
 
   int result = 1;
@@ -699,23 +752,33 @@ lval* builtin_ord(lenv* e, lval* a, char* op) {
 
   lval_del(a);
 
+  if (invert) { result = !result; }
+
   return lval_bool(result);
 }
 
+lval* builtin_eq(lenv* e, lval* a) {
+  return builtin_compare(e, a, "==", 0, 0);
+}
+
+lval* builtin_not_eq(lenv* e, lval* a) {
+  return builtin_compare(e, a, "==", 0, 1);
+}
+
 lval* builtin_gt(lenv* e, lval* a) {
-  return builtin_ord(e, a, ">");
+  return builtin_compare(e, a, ">", 1, 0);
 }
 
 lval* builtin_lt(lenv* e, lval* a) {
-  return builtin_ord(e, a, "<");
+  return builtin_compare(e, a, "<", 1, 0);
 }
 
 lval* builtin_gte(lenv* e, lval* a) {
-  return builtin_ord(e, a, ">=");
+  return builtin_compare(e, a, ">=", 1, 0);
 }
 
 lval* builtin_lte(lenv* e, lval* a) {
-  return builtin_ord(e, a, "<=");
+  return builtin_compare(e, a, "<=", 1, 0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1054,6 +1117,9 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "min", builtin_min);
   lenv_add_builtin(e, "max", builtin_max);
 
+  /* Comparison/equality functions */
+  lenv_add_builtin(e, "==", builtin_eq);
+  lenv_add_builtin(e, "!=", builtin_not_eq);
   lenv_add_builtin(e, ">", builtin_gt);
   lenv_add_builtin(e, "<", builtin_lt);
   lenv_add_builtin(e, ">=", builtin_gte);
