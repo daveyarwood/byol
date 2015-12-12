@@ -611,6 +611,12 @@ void lval_expr_print(lval* v, char open, char close) {
     "Got %i, expected at least %i.", \
     fn, args->count, num)
 
+#define LASSERT_AT_MOST_NUM(fn, args, num) \
+  LASSERT(args, args->count <= num, \
+    "Invalid number of arguments passed to '%s'. " \
+    "Got %i, expected at most %i.", \
+    fn, args->count, num)
+
 #define LASSERT_TYPE(fn, args, index, expect) \
   LASSERT(args, args->cell[index]->type == expect, \
     "Incorrect type for argument #%i passed to '%s'. Got %s, expected %s.", \
@@ -779,6 +785,33 @@ lval* builtin_gte(lenv* e, lval* a) {
 
 lval* builtin_lte(lenv* e, lval* a) {
   return builtin_compare(e, a, "<=", 1, 0);
+}
+
+lval* builtin_if(lenv* e, lval* a) {
+  LASSERT_AT_LEAST_NUM("if", a, 2);
+  LASSERT_AT_MOST_NUM("if", a, 3);
+  LASSERT_TYPE("if", a, 0, LVAL_BOOL);
+
+  lval* result;
+
+  if (a->cell[0]->bl) {
+    if (a->cell[1]->type == LVAL_QEXPR) {
+      a->cell[1]->type = LVAL_SEXPR;
+    }
+    result = lval_eval(e, lval_pop(a, 1));
+  } else if (a->count == 3) {
+    if (a->cell[2]->type == LVAL_QEXPR) {
+      a->cell[2]->type = LVAL_SEXPR;
+    }
+    result = lval_eval(e, lval_pop(a, 2));
+  } else {
+    /* return () if no 'else' clause and the condition is false */
+    result = lval_sexpr();
+  }
+
+  lval_del(a);
+
+  return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1118,6 +1151,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "max", builtin_max);
 
   /* Comparison/equality functions */
+  lenv_add_builtin(e, "if", builtin_if);
   lenv_add_builtin(e, "==", builtin_eq);
   lenv_add_builtin(e, "!=", builtin_not_eq);
   lenv_add_builtin(e, ">", builtin_gt);
