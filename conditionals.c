@@ -1459,7 +1459,7 @@ int main(int argc, char** argv) {
     "                                                                        \
       long     : /-?[0-9]+/ ;                                                \
       double   : /-?[0-9]+\\.[0-9]+/ ;                                       \
-      symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&%\\|]+/ ;                         \
+      symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!\\?&%\\|]+/ ;                   \
       sexpr    : '(' <expr>* ')' ;                                           \
       qexpr    : '{' <expr>* '}' ;                                           \
       expr     : <double> | <long> | <symbol> | <sexpr> | <qexpr>;           \
@@ -1502,6 +1502,14 @@ int main(int argc, char** argv) {
                  "  {if (== coll {})"
                  "    {}"
                  "    {join (reverse (tail coll)) (head coll)}})",
+                 Lispy, e);
+
+  run_lispy_code("(def\\ {contains? coll x}"
+                 "  {if (== (len coll) 0)"
+                 "    false"
+                 "    {if (== (first coll) x)"
+                 "      true"
+                 "      {contains? (rest coll) x}}})",
                  Lispy, e);
 
   while (1) {
