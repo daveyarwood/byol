@@ -1494,6 +1494,8 @@ int main(int argc, char** argv) {
   run_lispy_code("(def\\ {fourth xs} {nth xs 3})", Lispy, e);
   run_lispy_code("(def\\ {fifth xs} {nth xs 4})", Lispy, e);
 
+  run_lispy_code("(def\\ {last coll} {first (reverse coll)})", Lispy, e);
+
   run_lispy_code("(def\\ {flip f x y}"
                  "  {eval {f y x}})",
                  Lispy, e);
