@@ -130,12 +130,12 @@ lval* lval_bool(int x) {
 }
 
 lval* lval_sym(char* s) {
-  if (strstr(s, "true"))
+  if (strcmp(s, "true") == 0)
   {
     return lval_bool(1);
   }
 
-  if (strstr(s, "false"))
+  if (strcmp(s, "false") == 0)
   {
     return lval_bool(0);
   }
@@ -321,6 +321,83 @@ lval* lval_cons(lval* x, lval* sexp) {
   return new_sexp;
 }
 
+int lval_compare(lval* x, lval* y, char* op) {
+  if (strcmp(op, ">") == 0) {
+    if(x->type == LVAL_LONG && y->type == LVAL_LONG) {
+      return x->lng > y->lng;
+    }
+
+    if(x->type == LVAL_LONG && y->type == LVAL_DBL) {
+      return x->lng > y->dbl;
+    }
+
+    if(x->type == LVAL_DBL && y->type == LVAL_LONG) {
+      return x->dbl > y->lng;
+    }
+
+    if(x->type == LVAL_DBL && y->type == LVAL_DBL) {
+      return x->dbl > y->dbl;
+    }
+  }
+
+  if (strcmp(op, "<") == 0) {
+    if(x->type == LVAL_LONG && y->type == LVAL_LONG) {
+      return x->lng < y->lng;
+    }
+
+    if(x->type == LVAL_LONG && y->type == LVAL_DBL) {
+      return x->lng < y->dbl;
+    }
+
+    if(x->type == LVAL_DBL && y->type == LVAL_LONG) {
+      return x->dbl < y->lng;
+    }
+
+    if(x->type == LVAL_DBL && y->type == LVAL_DBL) {
+      return x->dbl < y->dbl;
+    }
+  }
+
+  if (strcmp(op, ">=") == 0) {
+    if(x->type == LVAL_LONG && y->type == LVAL_LONG) {
+      return x->lng >= y->lng;
+    }
+
+    if(x->type == LVAL_LONG && y->type == LVAL_DBL) {
+      return x->lng >= y->dbl;
+    }
+
+    if(x->type == LVAL_DBL && y->type == LVAL_LONG) {
+      return x->dbl >= y->lng;
+    }
+
+    if(x->type == LVAL_DBL && y->type == LVAL_DBL) {
+      return x->dbl >= y->dbl;
+    }
+  }
+
+  if (strcmp(op, "<=") == 0) {
+    if(x->type == LVAL_LONG && y->type == LVAL_LONG) {
+      return x->lng <= y->lng;
+    }
+
+    if(x->type == LVAL_LONG && y->type == LVAL_DBL) {
+      return x->lng <= y->dbl;
+    }
+
+    if(x->type == LVAL_DBL && y->type == LVAL_LONG) {
+      return x->dbl <= y->lng;
+    }
+
+    if(x->type == LVAL_DBL && y->type == LVAL_DBL) {
+      return x->dbl <= y->dbl;
+    }
+  }
+
+  // we should never get this far... return -1, I guess
+  return -1;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 lenv* lenv_new(void) {
@@ -479,6 +556,12 @@ void lval_expr_print(lval* v, char open, char close) {
     "Invalid number of arguments passed to '%s'. Got %i, expected %i.", \
     fn, args->count, num)
 
+#define LASSERT_AT_LEAST_NUM(fn, args, num) \
+  LASSERT(args, args->count >= num, \
+    "Invalid number of arguments passed to '%s'. " \
+    "Got %i, expected at least %i.", \
+    fn, args->count, num)
+
 #define LASSERT_TYPE(fn, args, index, expect) \
   LASSERT(args, args->cell[index]->type == expect, \
     "Incorrect type for argument #%i passed to '%s.' Got %s, expected %s.", \
@@ -588,8 +671,51 @@ lval* builtin_len(lenv* e, lval* a) {
   lval* qexp = lval_pop(a, 0);
 
   int l = qexp->count;
+  lval_del(qexp);
   lval_del(a);
   return lval_long(l);
+}
+
+lval* builtin_ord(lenv* e, lval* a, char* op) {
+  /* There must be at least one argument. */
+  LASSERT_AT_LEAST_NUM(op, a, 1);
+  /* If there is exactly one argument (e.g. (> 1)), return true */
+  if (a->count == 1) {
+    return lval_bool(1);
+  }
+
+  /* All args must be numbers */
+  for (int i = 0; i < a->count; i++) {
+    LASSERT_NUMBER_TYPE(op, a, i);
+  }
+
+  int result = 1;
+  for (int i = 1; i < a->count; i++) {
+    if (lval_compare(a->cell[i-1], a->cell[i], op) == 0) {
+      result = 0;
+      break;
+    }
+  }
+
+  lval_del(a);
+
+  return lval_bool(result);
+}
+
+lval* builtin_gt(lenv* e, lval* a) {
+  return builtin_ord(e, a, ">");
+}
+
+lval* builtin_lt(lenv* e, lval* a) {
+  return builtin_ord(e, a, "<");
+}
+
+lval* builtin_gte(lenv* e, lval* a) {
+  return builtin_ord(e, a, ">=");
+}
+
+lval* builtin_lte(lenv* e, lval* a) {
+  return builtin_ord(e, a, "<=");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -927,6 +1053,11 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "pow", builtin_pow);
   lenv_add_builtin(e, "min", builtin_min);
   lenv_add_builtin(e, "max", builtin_max);
+
+  lenv_add_builtin(e, ">", builtin_gt);
+  lenv_add_builtin(e, "<", builtin_lt);
+  lenv_add_builtin(e, ">=", builtin_gte);
+  lenv_add_builtin(e, "<=", builtin_lte);
 
   /* Variable functions */
   lenv_add_builtin(e, "def", builtin_def);
