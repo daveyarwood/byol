@@ -1483,17 +1483,16 @@ int main(int argc, char** argv) {
                  "  {eval (join (list f) xs)})",
                  Lispy, e);
 
-  run_lispy_code("(def\\ {second xs}"
-                 "  {first (rest xs)})",
+  run_lispy_code("(def\\ {nth coll n}"
+                 "  {if (== n 0)"
+                 "    {first coll}"
+                 "    {nth (rest coll) (- n 1)}})",
                  Lispy, e);
 
-  run_lispy_code("(def\\ {third xs}"
-                 "  {first (rest (rest xs))})",
-                 Lispy, e);
-
-  run_lispy_code("(def\\ {fourth xs}"
-                 "  {first (rest (rest (rest xs)))})",
-                 Lispy, e);
+  run_lispy_code("(def\\ {second xs} {nth xs 1})", Lispy, e);
+  run_lispy_code("(def\\ {third xs} {nth xs 2})", Lispy, e);
+  run_lispy_code("(def\\ {fourth xs} {nth xs 3})", Lispy, e);
+  run_lispy_code("(def\\ {fifth xs} {nth xs 4})", Lispy, e);
 
   run_lispy_code("(def\\ {flip f x y}"
                  "  {eval {f y x}})",
