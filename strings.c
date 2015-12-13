@@ -1454,6 +1454,11 @@ lval* lval_read(mpc_ast_t* t) {
   if (strcmp(t->tag, ">") == 0) {
     mpc_ast_t* last_child = t->children[t->children_num - 2];
 
+    // if last_child is a comment, ignore it and evaluate the child before it
+    if (strstr(last_child->tag, "comment")) {
+      last_child = t->children[t->children_num - 3];
+    }
+
     if (strcmp(last_child->tag, "regex") == 0) {
       return lval_sexpr();
     } else {
@@ -1494,28 +1499,30 @@ void run_lispy_code(char* input_string, mpc_parser_t *parser, lenv* env) {
 ////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv) {
-  mpc_parser_t* Long      = mpc_new("long");
-  mpc_parser_t* Double    = mpc_new("double");
-  mpc_parser_t* Symbol    = mpc_new("symbol");
-  mpc_parser_t* String    = mpc_new("string");
-  mpc_parser_t* Sexpr     = mpc_new("sexpr");
-  mpc_parser_t* Qexpr     = mpc_new("qexpr");
-  mpc_parser_t* Expr      = mpc_new("expr");
-  mpc_parser_t* Lispy     = mpc_new("lispy");
+  mpc_parser_t* Long    = mpc_new("long");
+  mpc_parser_t* Double  = mpc_new("double");
+  mpc_parser_t* Symbol  = mpc_new("symbol");
+  mpc_parser_t* String  = mpc_new("string");
+  mpc_parser_t* Comment = mpc_new("comment");
+  mpc_parser_t* Sexpr   = mpc_new("sexpr");
+  mpc_parser_t* Qexpr   = mpc_new("qexpr");
+  mpc_parser_t* Expr    = mpc_new("expr");
+  mpc_parser_t* Lispy   = mpc_new("lispy");
 
   mpca_lang(MPCA_LANG_DEFAULT,
-    "                                                                        \
-      long     : /-?[0-9]+/ ;                                                \
-      double   : /-?[0-9]+\\.[0-9]+/ ;                                       \
-      symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!\\?&%\\|]+/ ;                   \
-      string   : /\"(\\\\.|[^\"])*\"/ ;                                      \
-      sexpr    : '(' <expr>* ')' ;                                           \
-      qexpr    : '{' <expr>* '}' ;                                           \
-      expr     : <double> | <long> | <symbol> | <string>                     \
-               | <sexpr>  | <qexpr> ;                                        \
-      lispy    : /^/ <expr>* /$/ ;                                           \
+    "                                                                          \
+      long    : /-?[0-9]+/ ;                                                   \
+      double  : /-?[0-9]+\\.[0-9]+/ ;                                          \
+      symbol  : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!\\?&%\\|]+/ ;                      \
+      string  : /\"(\\\\.|[^\"])*\"/ ;                                         \
+      comment : /;[^\\r\\n]*/ ;                                                \
+      sexpr   : '(' <expr>* ')' ;                                              \
+      qexpr   : '{' <expr>* '}' ;                                              \
+      expr    : <double>  | <long>  | <symbol> | <string>                      \
+              | <comment> | <sexpr> | <qexpr> ;                                \
+      lispy   : /^/ <expr>* /$/ ;                                              \
     ",
-    Long, Double, Symbol, String, Sexpr, Qexpr, Expr, Lispy);
+    Long, Double, Symbol, String, Comment, Sexpr, Qexpr, Expr, Lispy);
 
   puts("Lispy Version 0.0.0.0.1");
   puts("Press Ctrl+c to Exit\n");
@@ -1586,6 +1593,7 @@ int main(int argc, char** argv) {
   }
 
   lenv_del(e);
-  mpc_cleanup(8, Long, Double, Symbol, String, Sexpr, Qexpr, Expr, Lispy);
+  mpc_cleanup(9, Long,  Double, Symbol, String, Comment,
+                 Sexpr, Qexpr,  Expr,   Lispy);
   return 0;
 }
