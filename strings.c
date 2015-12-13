@@ -33,8 +33,8 @@ struct lenv;
 typedef struct lval lval;
 typedef struct lenv lenv;
 
-enum { LVAL_ERR, LVAL_LONG, LVAL_DBL, LVAL_BOOL,
-       LVAL_SYM, LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR };
+enum { LVAL_ERR, LVAL_LONG, LVAL_DBL, LVAL_BOOL, LVAL_SYM,
+       LVAL_STR, LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR };
 
 typedef lval*(*lbuiltin)(lenv*, lval*);
 
@@ -47,6 +47,7 @@ struct lval {
   int bl;
   char* err;
   char* sym;
+  char* str;
 
   /* Function */
   lbuiltin builtin; // when not NULL, this is a builtin fn
@@ -66,6 +67,7 @@ char* ltype_name(int t) {
     case LVAL_DBL:   return "Double";
     case LVAL_BOOL:  return "Boolean";
     case LVAL_SYM:   return "Symbol";
+    case LVAL_STR:   return "String";
     case LVAL_FN:    return "Function";
     case LVAL_SEXPR: return "S-expression";
     case LVAL_QEXPR: return "Q-expression";
@@ -147,6 +149,14 @@ lval* lval_sym(char* s) {
   return v;
 }
 
+lval* lval_str(char* s) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_STR;
+  v->str  = malloc(strlen(s) + 1);
+  strcpy(v->str, s);
+  return v;
+}
+
 lval* lval_sexpr(void) {
   lval* v  = malloc(sizeof(lval));
   v->type  = LVAL_SEXPR;
@@ -202,9 +212,10 @@ void lval_del(lval* v) {
         lval_del(v->body);
       }
       break;
-    // for errors and symbols, free the string data
+    // for errors, symbols and strings, free the string data
     case LVAL_ERR: free(v->err); break;
     case LVAL_SYM: free(v->sym); break;
+    case LVAL_STR: free(v->str); break;
     // for S/Q-expressions, delete all the elements inside
     case LVAL_SEXPR:
     case LVAL_QEXPR:
@@ -244,11 +255,18 @@ lval* lval_copy(lval* v) {
     /* Copy strings using malloc and strcpy */
     case LVAL_ERR:
       x->err = malloc(strlen(v->err) + 1);
-      strcpy(x->err, v->err); break;
+      strcpy(x->err, v->err);
+      break;
 
     case LVAL_SYM:
       x->sym = malloc(strlen(v->sym) + 1);
-      strcpy(x->sym, v->sym); break;
+      strcpy(x->sym, v->sym);
+      break;
+
+    case LVAL_STR:
+      x->str = malloc(strlen(v->str) + 1);
+      strcpy(x->str, v->str);
+      break;
 
     /* Copy lists by copying each sub-expression */
     case LVAL_SEXPR:
@@ -338,6 +356,9 @@ int lval_eq(lval* x, lval* y) {
 
     case LVAL_SYM:
       return strcmp(x->sym, y->sym) == 0;
+
+    case LVAL_STR:
+      return strcmp(x->str, y->str) == 0;
 
     case LVAL_FN:
       if (x->builtin || y->builtin) {
@@ -545,6 +566,7 @@ void lenv_def(lenv* e, lval* k, lval* v) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+void lval_str_print(lval* v);
 void lval_expr_print(lval* v, char open, char close);
 
 void lval_print(lval* v) {
@@ -554,6 +576,7 @@ void lval_print(lval* v) {
     case LVAL_BOOL:  printf(v->bl == 0 ? "false" : "true"); break;
     case LVAL_ERR:   printf("Error: %s", v->err); break;
     case LVAL_SYM:   printf("%s", v->sym); break;
+    case LVAL_STR:   lval_str_print(v); break;
     case LVAL_SEXPR: lval_expr_print(v, '(', ')'); break;
     case LVAL_QEXPR: lval_expr_print(v, '{', '}'); break;
     case LVAL_FN:
@@ -573,6 +596,14 @@ void lval_print(lval* v) {
 void lval_println(lval* v) {
   lval_print(v);
   putchar('\n');
+}
+
+void lval_str_print(lval* v) {
+  char* escaped = malloc(strlen(v->str) + 1);
+  strcpy(escaped, v->str);
+  escaped = mpcf_escape(escaped);
+  printf("\"%s\"", escaped);
+  free(escaped);
 }
 
 void lval_expr_print(lval* v, char open, char close) {
@@ -1394,11 +1425,24 @@ lval* lval_read_double(mpc_ast_t* t) {
   }
 }
 
+lval* lval_read_str(mpc_ast_t* t) {
+  /* Cut off the final double-quote character */
+  t->contents[strlen(t->contents) - 1] = '\0';
+  /* Copy the string starting after the initial double-quote character */
+  char* unescaped = malloc(strlen(t->contents + 1) + 1);
+  strcpy(unescaped, t->contents + 1);
+  unescaped = mpcf_unescape(unescaped);
+  lval* str = lval_str(unescaped);
+  free(unescaped);
+  return str;
+}
+
 lval* lval_read(mpc_ast_t* t) {
   // for numbers and symbols, return conversion to that type
   if (strstr(t->tag, "long"))   { return lval_read_long(t);     }
   if (strstr(t->tag, "double")) { return lval_read_double(t);   }
   if (strstr(t->tag, "symbol")) { return lval_sym(t->contents); }
+  if (strstr(t->tag, "string")) { return lval_read_str(t); }
 
   // if root (>), read the last child (ignoring any others).
   //
@@ -1453,6 +1497,7 @@ int main(int argc, char** argv) {
   mpc_parser_t* Long      = mpc_new("long");
   mpc_parser_t* Double    = mpc_new("double");
   mpc_parser_t* Symbol    = mpc_new("symbol");
+  mpc_parser_t* String    = mpc_new("string");
   mpc_parser_t* Sexpr     = mpc_new("sexpr");
   mpc_parser_t* Qexpr     = mpc_new("qexpr");
   mpc_parser_t* Expr      = mpc_new("expr");
@@ -1463,12 +1508,14 @@ int main(int argc, char** argv) {
       long     : /-?[0-9]+/ ;                                                \
       double   : /-?[0-9]+\\.[0-9]+/ ;                                       \
       symbol   : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!\\?&%\\|]+/ ;                   \
+      string   : /\"(\\\\.|[^\"])*\"/ ;                                      \
       sexpr    : '(' <expr>* ')' ;                                           \
       qexpr    : '{' <expr>* '}' ;                                           \
-      expr     : <double> | <long> | <symbol> | <sexpr> | <qexpr>;           \
+      expr     : <double> | <long> | <symbol> | <string>                     \
+               | <sexpr>  | <qexpr> ;                                        \
       lispy    : /^/ <expr>* /$/ ;                                           \
     ",
-    Long, Double, Symbol, Sexpr, Qexpr, Expr, Lispy);
+    Long, Double, Symbol, String, Sexpr, Qexpr, Expr, Lispy);
 
   puts("Lispy Version 0.0.0.0.1");
   puts("Press Ctrl+c to Exit\n");
@@ -1539,6 +1586,6 @@ int main(int argc, char** argv) {
   }
 
   lenv_del(e);
-  mpc_cleanup(7, Long, Double, Symbol, Sexpr, Qexpr, Expr, Lispy);
+  mpc_cleanup(8, Long, Double, Symbol, String, Sexpr, Qexpr, Expr, Lispy);
   return 0;
 }
