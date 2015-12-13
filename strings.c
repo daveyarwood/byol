@@ -28,6 +28,16 @@ void add_history(char* unused) {}
 
 ////////////////////////////////////////////////////////////////////////////////
 
+mpc_parser_t* Long;
+mpc_parser_t* Double;
+mpc_parser_t* Symbol;
+mpc_parser_t* String;
+mpc_parser_t* Comment;
+mpc_parser_t* Sexpr;
+mpc_parser_t* Qexpr;
+mpc_parser_t* Expr;
+mpc_parser_t* Lispy;
+
 struct lval;
 struct lenv;
 typedef struct lval lval;
@@ -976,6 +986,42 @@ lval* builtin_exit(lenv* e, lval* a) {
   return lval_sexpr();
 }
 
+lval* lval_read(mpc_ast_t* t);
+
+lval* builtin_load_file(lenv* e, lval* a) {
+  LASSERT_NUM("load", a, 1);
+  LASSERT_TYPE("load", a, 0, LVAL_STR);
+
+  char* filename = a->cell[0]->str;
+
+  mpc_result_t r;
+  if (mpc_parse_contents(filename, Lispy, &r)) {
+    lval* expr = lval_read(r.output);
+    mpc_ast_delete(r.output);
+
+    while (expr->count) {
+      lval* x = lval_eval(e, lval_pop(expr, 0));
+      if (x->type == LVAL_ERR) { lval_println(x); }
+      lval_del(x);
+    }
+
+    lval_del(expr);
+    lval_del(a);
+
+    return lval_sexpr();
+  } else {
+    char* err_msg = mpc_err_string(r.error);
+    mpc_err_delete(r.error);
+
+    lval* err = lval_err("Could not load file %s.\n\n%s", filename, err_msg);
+
+    free(err_msg);
+    lval_del(a);
+
+    return err;
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -1499,15 +1545,15 @@ void run_lispy_code(char* input_string, mpc_parser_t *parser, lenv* env) {
 ////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv) {
-  mpc_parser_t* Long    = mpc_new("long");
-  mpc_parser_t* Double  = mpc_new("double");
-  mpc_parser_t* Symbol  = mpc_new("symbol");
-  mpc_parser_t* String  = mpc_new("string");
-  mpc_parser_t* Comment = mpc_new("comment");
-  mpc_parser_t* Sexpr   = mpc_new("sexpr");
-  mpc_parser_t* Qexpr   = mpc_new("qexpr");
-  mpc_parser_t* Expr    = mpc_new("expr");
-  mpc_parser_t* Lispy   = mpc_new("lispy");
+  Long    = mpc_new("long");
+  Double  = mpc_new("double");
+  Symbol  = mpc_new("symbol");
+  String  = mpc_new("string");
+  Comment = mpc_new("comment");
+  Sexpr   = mpc_new("sexpr");
+  Qexpr   = mpc_new("qexpr");
+  Expr    = mpc_new("expr");
+  Lispy   = mpc_new("lispy");
 
   mpca_lang(MPCA_LANG_DEFAULT,
     "                                                                          \
@@ -1524,72 +1570,85 @@ int main(int argc, char** argv) {
     ",
     Long, Double, Symbol, String, Comment, Sexpr, Qexpr, Expr, Lispy);
 
-  puts("Lispy Version 0.0.0.0.1");
-  puts("Press Ctrl+c to Exit\n");
-
   lenv* e = lenv_new();
   lenv_add_builtins(e);
 
-  /* Define additional builtins using Lispy syntax */
-  run_lispy_code("(def {def\\}"
-                 "  (\\ {args body}"
-                 "    {def (head args) (\\ (tail args) body)}))",
-                 Lispy, e);
+  /* Start REPL if no args */
+  if (argc == 1) {
+    puts("Lispy Version 0.0.0.0.1");
+    puts("Press Ctrl+c to Exit\n");
 
-  run_lispy_code("(def\\ {apply f xs}"
-                 "  {eval (join (list f) xs)})",
-                 Lispy, e);
+    /* Define additional builtins using Lispy syntax */
+    run_lispy_code("(def {def\\}"
+                   "  (\\ {args body}"
+                   "    {def (head args) (\\ (tail args) body)}))",
+                   Lispy, e);
 
-  run_lispy_code("(def\\ {nth coll n}"
-                 "  {if (== n 0)"
-                 "    {first coll}"
-                 "    {nth (rest coll) (- n 1)}})",
-                 Lispy, e);
+    run_lispy_code("(def\\ {apply f xs}"
+                   "  {eval (join (list f) xs)})",
+                   Lispy, e);
 
-  run_lispy_code("(def\\ {second xs} {nth xs 1})", Lispy, e);
-  run_lispy_code("(def\\ {third xs} {nth xs 2})", Lispy, e);
-  run_lispy_code("(def\\ {fourth xs} {nth xs 3})", Lispy, e);
-  run_lispy_code("(def\\ {fifth xs} {nth xs 4})", Lispy, e);
+    run_lispy_code("(def\\ {nth coll n}"
+                   "  {if (== n 0)"
+                   "    {first coll}"
+                   "    {nth (rest coll) (- n 1)}})",
+                   Lispy, e);
 
-  run_lispy_code("(def\\ {last coll} {first (reverse coll)})", Lispy, e);
+    run_lispy_code("(def\\ {second xs} {nth xs 1})", Lispy, e);
+    run_lispy_code("(def\\ {third xs} {nth xs 2})", Lispy, e);
+    run_lispy_code("(def\\ {fourth xs} {nth xs 3})", Lispy, e);
+    run_lispy_code("(def\\ {fifth xs} {nth xs 4})", Lispy, e);
 
-  run_lispy_code("(def\\ {flip f x y}"
-                 "  {eval {f y x}})",
-                 Lispy, e);
+    run_lispy_code("(def\\ {last coll} {first (reverse coll)})", Lispy, e);
 
-  run_lispy_code("(def\\ {reverse coll}"
-                 "  {if (== coll {})"
-                 "    {}"
-                 "    {join (reverse (tail coll)) (head coll)}})",
-                 Lispy, e);
+    run_lispy_code("(def\\ {flip f x y}"
+                   "  {eval {f y x}})",
+                   Lispy, e);
 
-  run_lispy_code("(def\\ {contains? coll x}"
-                 "  {if (== (len coll) 0)"
-                 "    false"
-                 "    {if (== (first coll) x)"
-                 "      true"
-                 "      {contains? (rest coll) x}}})",
-                 Lispy, e);
+    run_lispy_code("(def\\ {reverse coll}"
+                   "  {if (== coll {})"
+                   "    {}"
+                   "    {join (reverse (tail coll)) (head coll)}})",
+                   Lispy, e);
 
-  while (1) {
-    char* input = readline("lispy> ");
-    add_history(input);
+    run_lispy_code("(def\\ {contains? coll x}"
+                   "  {if (== (len coll) 0)"
+                   "    false"
+                   "    {if (== (first coll) x)"
+                   "      true"
+                   "      {contains? (rest coll) x}}})",
+                   Lispy, e);
 
-    /* Attempt to parse user input */
-    mpc_result_t r;
-    if (mpc_parse("<stdin>", input, Lispy, &r)) {
-      /* On success, evaluate and print the result */
-      lval* result = lval_eval(e, lval_read(r.output));
-      lval_println(result);
-      lval_del(result);
-      mpc_ast_delete(r.output);
-    } else {
-      /* On error, print the error */
-      mpc_err_print(r.error);
-      mpc_err_delete(r.error);
+    while (1) {
+      char* input = readline("lispy> ");
+      add_history(input);
+
+      /* Attempt to parse user input */
+      mpc_result_t r;
+      if (mpc_parse("<stdin>", input, Lispy, &r)) {
+        /* On success, evaluate and print the result */
+        lval* result = lval_eval(e, lval_read(r.output));
+        lval_println(result);
+        lval_del(result);
+        mpc_ast_delete(r.output);
+      } else {
+        /* On error, print the error */
+        mpc_err_print(r.error);
+        mpc_err_delete(r.error);
+      }
+
+      free(input);
     }
+  }
 
-    free(input);
+  /* If there are args, consider them file names and read & evaluate the files */
+  if (argc >= 2) {
+    for (int i = 1; i < argc; i++) {
+      lval* load_file_args = lval_conj(lval_sexpr(), lval_str(argv[i]));
+      lval* result = builtin_load_file(e, load_file_args);
+      if (result->type == LVAL_ERR) { lval_println(result); }
+      lval_del(result);
+    }
   }
 
   lenv_del(e);
