@@ -353,6 +353,9 @@ int lval_eq(lval* x, lval* y) {
   if (x->type != y->type) { return 0; }
 
   switch (x->type) {
+    case LVAL_BOOL:
+      if (y->type == LVAL_BOOL) { return x->bl == y->bl; }
+
     case LVAL_LONG:
       if (y->type == LVAL_LONG) { return x->lng == y->lng; }
       if (y->type == LVAL_DBL)  { return x->lng == y->dbl; }
