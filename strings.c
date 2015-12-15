@@ -44,7 +44,7 @@ typedef struct lval lval;
 typedef struct lenv lenv;
 
 enum { LVAL_ERR, LVAL_LONG, LVAL_DBL, LVAL_BOOL, LVAL_SYM,
-       LVAL_STR, LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR };
+       LVAL_STR, LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR, LVAL_OK };
 
 typedef lval*(*lbuiltin)(lenv*, lval*);
 
@@ -81,6 +81,7 @@ char* ltype_name(int t) {
     case LVAL_FN:    return "Function";
     case LVAL_SEXPR: return "S-expression";
     case LVAL_QEXPR: return "Q-expression";
+    case LVAL_OK:    return "OK";
     default:         return "Unknown";
   }
 }
@@ -141,7 +142,18 @@ lval* lval_bool(int x) {
   return v;
 }
 
+lval* lval_ok(void) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_OK;
+  return v;
+}
+
 lval* lval_sym(char* s) {
+  if (strcmp(s, "ok") == 0)
+  {
+    return lval_ok();
+  }
+
   if (strcmp(s, "true") == 0)
   {
     return lval_bool(1);
@@ -208,10 +220,11 @@ lval* lval_lambda(lval* args, lval* body) {
 
 void lval_del(lval* v) {
   switch (v->type) {
-    // do nothing special for numbers / booleans
+    // do nothing special for numbers / booleans / ok
     case LVAL_LONG:
     case LVAL_DBL:
     case LVAL_BOOL:
+    case LVAL_OK:
       break;
     // for fns, nothing special needs to be done if it's a builtin;
     // if it's a user-defined fn, free the associated data
@@ -246,6 +259,9 @@ lval* lval_copy(lval* v) {
   x->type = v->type;
 
   switch (v->type) {
+    /* Nothing special needs to be done for OK */
+    case LVAL_OK: break;
+
     /* Copy numbers and booleans directly */
     case LVAL_LONG: x->lng = v->lng; break;
     case LVAL_DBL: x->dbl = v->dbl; break;
@@ -353,6 +369,10 @@ int lval_eq(lval* x, lval* y) {
   if (x->type != y->type) { return 0; }
 
   switch (x->type) {
+    case LVAL_OK:
+      /* OK is always equal to OK */
+      if (y->type == LVAL_OK) { return 1; }
+
     case LVAL_BOOL:
       if (y->type == LVAL_BOOL) { return x->bl == y->bl; }
 
@@ -584,6 +604,7 @@ void lval_expr_print(lval* v, char open, char close);
 
 void lval_print(lval* v) {
   switch (v->type) {
+    case LVAL_OK:    printf("ok"); break;
     case LVAL_LONG:  printf("%li", v->lng); break;
     case LVAL_DBL:   printf("%f", v->dbl); break;
     case LVAL_BOOL:  printf(v->bl == 0 ? "false" : "true"); break;
@@ -848,8 +869,8 @@ lval* builtin_if(lenv* e, lval* a) {
     }
     result = lval_eval(e, lval_pop(a, 2));
   } else {
-    /* return () if no 'else' clause and the condition is false */
-    result = lval_sexpr();
+    /* return OK if no 'else' clause and the condition is false */
+    result = lval_ok();
   }
 
   lval_del(a);
@@ -938,8 +959,7 @@ lval* builtin_var(lenv* e, lval* a, char* fn) {
   }
 
   lval_del(a);
-  // return an empty sexp ()
-  return lval_sexpr();
+  return lval_ok();
 }
 
 lval* builtin_def(lenv* e, lval* a) {
@@ -957,7 +977,7 @@ lval* builtin_print_env(lenv* e, lval* a) {
   }
 
   // return an empty sexp ()
-  return lval_sexpr();
+  return lval_ok();
 }
 
 lval* builtin_lambda(lenv* e, lval* a) {
@@ -985,8 +1005,8 @@ lval* builtin_exit(lenv* e, lval* a) {
   putchar('\n');
   exit(0);
 
-  // return an empty sexp () to appease the compiler
-  return lval_sexpr();
+  // have to return an lval* here to appease the compiler
+  return lval_ok();
 }
 
 lval* lval_read(mpc_ast_t* t);
@@ -1011,7 +1031,7 @@ lval* builtin_load_file(lenv* e, lval* a) {
     lval_del(expr);
     lval_del(a);
 
-    return lval_sexpr();
+    return lval_ok();
   } else {
     char* err_msg = mpc_err_string(r.error);
     mpc_err_delete(r.error);
@@ -1034,7 +1054,7 @@ lval* builtin_print(lenv* e, lval* a) {
   putchar('\n');
   lval_del(a);
 
-  return lval_sexpr();
+  return lval_ok();
 }
 
 lval* builtin_error(lenv* e, lval* a) {
@@ -1524,7 +1544,7 @@ lval* lval_read(mpc_ast_t* t) {
   // address boundary error. t->children_num - 2 is what we really want.
   //
   // if t->children_num - 2 is a regex too (probably \^\), then we assume this
-  // is an empty line and return an empty S-expression as a result
+  // is an empty line and just return OK
   if (strcmp(t->tag, ">") == 0) {
     mpc_ast_t* last_child = t->children[t->children_num - 2];
 
@@ -1534,7 +1554,7 @@ lval* lval_read(mpc_ast_t* t) {
     }
 
     if (strcmp(last_child->tag, "regex") == 0) {
-      return lval_sexpr();
+      return lval_ok();
     } else {
       return lval_read(last_child);
     }
