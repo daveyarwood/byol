@@ -343,8 +343,22 @@ lval* lval_take(lval* sexp, int i) {
 }
 
 lval* lval_join(lval* x, lval* y) {
-  while (y->count) {
-    x = lval_conj(x, lval_pop(y, 0));
+  char* x_plus_y;
+
+  switch (x->type) {
+
+    case LVAL_QEXPR:
+      while (y->count) {
+        x = lval_conj(x, lval_pop(y, 0));
+      }
+      break;
+
+    case LVAL_STR:
+      x_plus_y = malloc(strlen(x->str) + strlen(y->str) + 1);
+      strcpy(x_plus_y, x->str);
+      strcat(x_plus_y, y->str);
+      x = lval_str(x_plus_y);
+      break;
   }
 
   lval_del(y);
@@ -759,11 +773,25 @@ lval* builtin_eval(lenv* e, lval* a) {
 }
 
 lval* builtin_join(lenv* e, lval* a) {
-  for (int i = 0; i < a->count; i++) {
+  // The arguments must be either all strings or all Q-expressions.
+  //
+  // The type of the first argument determines which error message to use if any
+  // subsequent arguments are not the same type.
+  int arg_type = a->cell[0]->type;
+  if (arg_type == LVAL_SEXPR) { arg_type = LVAL_QEXPR; }
+  LASSERT(a, arg_type == LVAL_STR || arg_type == LVAL_QEXPR,
+          "Incorrect type for argument #1 passed to 'join'. "
+          "Got %s, expected %s or %s.",
+          ltype_name(arg_type),
+          ltype_name(LVAL_STR),
+          ltype_name(LVAL_QEXPR));
+
+  for (int i = 1; i < a->count; i++) {
+    // convert () => {} for joining purposes
     if (a->cell[i]->type == LVAL_SEXPR) {
       a->cell[i]->type = LVAL_QEXPR;
     }
-    LASSERT_TYPE("join", a, i, LVAL_QEXPR);
+    LASSERT_TYPE("join", a, i, arg_type);
   }
 
   lval* x = lval_pop(a, 0);
