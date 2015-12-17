@@ -750,14 +750,27 @@ lval* builtin_first(lenv* e, lval* a) {
   return v;
 }
 
+// When given a Q-expression, returns the tail of the list.
+//
+// When given a string, returns the string after the first character.
 lval* builtin_tail(lenv* e, lval* a) {
   LASSERT_NUM("tail", a, 1);
-  LASSERT_TYPE("tail", a, 0, LVAL_QEXPR);
-  LASSERT_NOT_EMPTY("tail", a, 0);
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR ||
+             a->cell[0]->type == LVAL_STR,
+          "Incorrect type for argument #1 passed to 'tail'. "
+          "Got %s, expected %s or %s.");
 
-  lval* v = lval_take(a, 0);
-  lval_del(lval_pop(v, 0));
-  return v;
+  if (a->cell[0]->type == LVAL_QEXPR) {
+    LASSERT_NOT_EMPTY("tail", a, 0);
+
+    lval* qexp = lval_take(a, 0);
+    lval_del(lval_pop(qexp, 0));
+    return qexp;
+  }
+
+  lval* str = lval_take(a, 0);
+  memmove(str->str, str->str + 1, strlen(str->str));
+  return str;
 }
 
 lval* builtin_init(lenv* e, lval* a) {
