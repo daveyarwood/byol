@@ -713,15 +713,29 @@ void lval_expr_print(lval* v, char open, char close) {
   LASSERT(args, args->cell[index]->count != 0, \
     "Empty Q-expression passed to '%s' as argument #%i.", fn, index + 1);
 
-// Returns a Q-expression containing the first element in the list.
+// When given a Q-expression, returns a Q-expression containing the first
+// element in the list.
+//
+// When given a string, returns a string containing only the first
+// character of the string.
 lval* builtin_head(lenv* e, lval* a) {
   LASSERT_NUM("head", a, 1);
-  LASSERT_TYPE("head", a, 0, LVAL_QEXPR);
-  LASSERT_NOT_EMPTY("head", a, 0);
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR ||
+             a->cell[0]->type == LVAL_STR,
+          "Incorrect type for argument #1 passed to 'head'. "
+          "Got %s, expected %s or %s.");
 
-  lval* v = lval_take(a, 0);
-  while (v->count > 1) { lval_del(lval_pop(v, 1)); }
-  return v;
+  if (a->cell[0]->type == LVAL_QEXPR) {
+    LASSERT_NOT_EMPTY("head", a, 0);
+
+    lval* qexp = lval_take(a, 0);
+    while (qexp->count > 1) { lval_del(lval_pop(qexp, 1)); }
+    return qexp;
+  }
+
+  lval* str = lval_take(a, 0);
+  str->str[1] = '\0';
+  return str;
 }
 
 // Like head, but returns the element itself (not a Q-expression).
