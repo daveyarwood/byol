@@ -1112,6 +1112,16 @@ lval* builtin_print(lenv* e, lval* a) {
   return lval_ok();
 }
 
+lval* builtin_show(lenv* e, lval* a) {
+  LASSERT_NUM("show", a, 1);
+  LASSERT_TYPE("show", a, 0, LVAL_STR);
+
+  lval* str = lval_take(a, 0);
+  printf("%s\n", str->str);
+
+  return lval_ok();
+}
+
 lval* builtin_error(lenv* e, lval* a) {
   LASSERT_NUM("error", a, 1);
   LASSERT_TYPE("error", a, 0, LVAL_STR);
@@ -1397,6 +1407,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "load-file", builtin_load_file);
   lenv_add_builtin(e, "error", builtin_error);
   lenv_add_builtin(e, "print", builtin_print);
+  lenv_add_builtin(e, "show", builtin_show);
 
   /* Function functions */
   lenv_add_builtin(e, "\\", builtin_lambda);
