@@ -1131,6 +1131,28 @@ lval* builtin_error(lenv* e, lval* a) {
   return err;
 }
 
+lval* builtin_read(lenv* e, lval* a) {
+  LASSERT_NUM("read", a, 1);
+  LASSERT_TYPE("read", a, 0, LVAL_STR);
+
+  char* input = lval_take(a, 0)->str;
+
+  mpc_result_t r;
+  if (mpc_parse("<stdin>", input, Lispy, &r)) {
+    lval* result = lval_read(r.output);
+    mpc_ast_delete(r.output);
+
+    if (result->type == LVAL_SEXPR) {
+      result->type = LVAL_QEXPR;
+    }
+    return result;
+  } else {
+    lval* err = lval_err(mpc_err_string(r.error));
+    mpc_err_delete(r.error);
+    return err;
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -1404,6 +1426,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "=", builtin_put);
   lenv_add_builtin(e, "print-env", builtin_print_env);
 
+  lenv_add_builtin(e, "read", builtin_read);
   lenv_add_builtin(e, "load-file", builtin_load_file);
   lenv_add_builtin(e, "error", builtin_error);
   lenv_add_builtin(e, "print", builtin_print);
