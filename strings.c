@@ -1575,7 +1575,6 @@ lval* lval_eval(lenv* e, lval* v) {
   }
 
   if (v->type == LVAL_SEXPR) {
-    /* Evaluate S-expressions */
     return lval_eval_sexpr(e, v);
   }
 
@@ -1627,26 +1626,16 @@ lval* lval_read(mpc_ast_t* t) {
   if (strstr(t->tag, "symbol")) { return lval_sym(t->contents); }
   if (strstr(t->tag, "string")) { return lval_read_str(t); }
 
-  // if root (>), read the last child (ignoring any others).
-  //
-  // t->children_num - 1 is some sort of regex (probably \$\), which causes an
-  // address boundary error. t->children_num - 2 is what we really want.
-  //
-  // if t->children_num - 2 is a regex too (probably \^\), then we assume this
-  // is an empty line and just return OK
+  // if root (>), read every child as an expression and return a single
+  // Q-expression containing all of the expressions
   if (strcmp(t->tag, ">") == 0) {
-    mpc_ast_t* last_child = t->children[t->children_num - 2];
-
-    // if last_child is a comment, ignore it and evaluate the child before it
-    if (strstr(last_child->tag, "comment")) {
-      last_child = t->children[t->children_num - 3];
+    lval* qexp = lval_qexpr();
+    for (int i = 0; i < t->children_num; i++) {
+      if (strcmp(t->children[i]->tag, "regex") == 0) { continue; }
+      if (strstr(t->children[i]->tag, "comment")) { continue; }
+      qexp = lval_conj(qexp, lval_read(t->children[i]));
     }
-
-    if (strcmp(last_child->tag, "regex") == 0) {
-      return lval_ok();
-    } else {
-      return lval_read(last_child);
-    }
+    return qexp;
   }
 
   // if sexpr or qexpr, then create an empty list...
@@ -1763,10 +1752,13 @@ int main(int argc, char** argv) {
       /* Attempt to parse user input */
       mpc_result_t r;
       if (mpc_parse("<stdin>", input, Lispy, &r)) {
-        /* On success, evaluate and print the result */
-        lval* result = lval_eval(e, lval_read(r.output));
-        lval_println(result);
-        lval_del(result);
+        /* On success, evaluate and print the result of each expression */
+        lval* exprs = lval_eval(e, lval_read(r.output));
+        while (exprs->count) {
+          lval* result = lval_eval(e, lval_pop(exprs, 0));
+          lval_println(result);
+          lval_del(result);
+        }
         mpc_ast_delete(r.output);
       } else {
         /* On error, print the error */
