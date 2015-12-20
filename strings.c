@@ -1668,6 +1668,13 @@ void run_lispy_code(char* input_string, mpc_parser_t *parser, lenv* env) {
   }
 }
 
+void load_file_into_env(lenv* e, char* filename) {
+  lval* load_file_args = lval_conj(lval_sexpr(), lval_str(filename));
+  lval* result = builtin_load_file(e, load_file_args);
+  if (result->type == LVAL_ERR) { lval_println(result); }
+  lval_del(result);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv) {
@@ -1704,46 +1711,7 @@ int main(int argc, char** argv) {
     puts("Lispy Version 0.0.0.0.1");
     puts("Press Ctrl+c to Exit\n");
 
-    /* Define additional builtins using Lispy syntax */
-    run_lispy_code("(def {def\\}"
-                   "  (\\ {args body}"
-                   "    {def (head args) (\\ (tail args) body)}))",
-                   Lispy, e);
-
-    run_lispy_code("(def\\ {apply f xs}"
-                   "  {eval (join (list f) xs)})",
-                   Lispy, e);
-
-    run_lispy_code("(def\\ {nth coll n}"
-                   "  {if (== n 0)"
-                   "    {first coll}"
-                   "    {nth (rest coll) (- n 1)}})",
-                   Lispy, e);
-
-    run_lispy_code("(def\\ {second xs} {nth xs 1})", Lispy, e);
-    run_lispy_code("(def\\ {third xs} {nth xs 2})", Lispy, e);
-    run_lispy_code("(def\\ {fourth xs} {nth xs 3})", Lispy, e);
-    run_lispy_code("(def\\ {fifth xs} {nth xs 4})", Lispy, e);
-
-    run_lispy_code("(def\\ {last coll} {first (reverse coll)})", Lispy, e);
-
-    run_lispy_code("(def\\ {flip f x y}"
-                   "  {eval {f y x}})",
-                   Lispy, e);
-
-    run_lispy_code("(def\\ {reverse coll}"
-                   "  {if (== coll {})"
-                   "    {}"
-                   "    {join (reverse (tail coll)) (head coll)}})",
-                   Lispy, e);
-
-    run_lispy_code("(def\\ {contains? coll x}"
-                   "  {if (== (len coll) 0)"
-                   "    false"
-                   "    {if (== (first coll) x)"
-                   "      true"
-                   "      {contains? (rest coll) x}}})",
-                   Lispy, e);
+    load_file_into_env(e, "prelude.lispy");
 
     while (1) {
       char* input = readline("lispy> ");
@@ -1772,12 +1740,7 @@ int main(int argc, char** argv) {
 
   /* If there are args, consider them file names and read & evaluate the files */
   if (argc >= 2) {
-    for (int i = 1; i < argc; i++) {
-      lval* load_file_args = lval_conj(lval_sexpr(), lval_str(argv[i]));
-      lval* result = builtin_load_file(e, load_file_args);
-      if (result->type == LVAL_ERR) { lval_println(result); }
-      lval_del(result);
-    }
+    for (int i = 1; i < argc; i++) { load_file_into_env(e, argv[i]); }
   }
 
   lenv_del(e);

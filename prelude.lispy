@@ -1,0 +1,34 @@
+(def {def\}
+  (\ {args body}
+    {def (head args) (\ (tail args) body)}))
+
+(def\ {apply f xs}
+  {eval (join (list f) xs)})
+
+(def\ {nth coll n}
+  {if (== n 0)
+    {first coll}
+    {nth (rest coll) (- n 1)}})
+
+(def\ {second xs} {nth xs 1})
+(def\ {third xs} {nth xs 2})
+(def\ {fourth xs} {nth xs 3})
+(def\ {fifth xs} {nth xs 4})
+
+(def\ {last coll} {first (reverse coll)})
+
+(def\ {flip f x y}
+  {eval {f y x}})
+
+(def\ {reverse coll}
+  {if (== coll {})
+    {}
+    {join (reverse (tail coll)) (head coll)}})
+
+(def\ {contains? coll x}
+  {if (== (len coll) 0)
+    false
+    {if (== (first coll) x)
+      true
+      {contains? (rest coll) x}}})
+
