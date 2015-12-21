@@ -1705,13 +1705,12 @@ int main(int argc, char** argv) {
 
   lenv* e = lenv_new();
   lenv_add_builtins(e);
+  load_file_into_env(e, "prelude.lispy");
 
   /* Start REPL if no args */
   if (argc == 1) {
     puts("Lispy Version 0.0.0.0.1");
     puts("Press Ctrl+c to Exit\n");
-
-    load_file_into_env(e, "prelude.lispy");
 
     while (1) {
       char* input = readline("lispy> ");
