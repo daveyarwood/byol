@@ -44,7 +44,8 @@ typedef struct lval lval;
 typedef struct lenv lenv;
 
 enum { LVAL_ERR, LVAL_LONG, LVAL_DBL, LVAL_BOOL, LVAL_SYM,
-       LVAL_STR, LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR, LVAL_OK };
+       LVAL_STR, LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR, LVAL_OK,
+       LVAL_FILE };
 
 typedef lval*(*lbuiltin)(lenv*, lval*);
 
@@ -68,6 +69,11 @@ struct lval {
   /* Expression */
   int count;
   lval** cell;
+
+  /* File */
+  FILE* file;
+  char* fname;
+  char* fmode;
 };
 
 char* ltype_name(int t) {
@@ -82,6 +88,7 @@ char* ltype_name(int t) {
     case LVAL_SEXPR: return "S-expression";
     case LVAL_QEXPR: return "Q-expression";
     case LVAL_OK:    return "OK";
+    case LVAL_FILE:  return "File";
     default:         return "Unknown";
   }
 }
@@ -202,6 +209,15 @@ lval* lval_fn(lbuiltin builtin) {
   return v;
 }
 
+lval* lval_file(char* filename, char* mode) {
+  lval* v  = malloc(sizeof(lval));
+  v->type  = LVAL_FILE;
+  v->file  = fopen(filename, mode);
+  v->fname = filename;
+  v->fmode = mode;
+  return v;
+}
+
 lenv* lenv_new(void);
 lenv* lenv_copy(lenv* e);
 void lenv_del(lenv* e);
@@ -247,6 +263,13 @@ void lval_del(lval* v) {
       }
       // also free the memory allocated to contain the pointers
       free(v->cell);
+      break;
+    // for files, we aren't freeing the file pointer itself because we're
+    // counting on the user to do that! we do need to free the filename and
+    // mode, though
+    case LVAL_FILE:
+      free(v->fname);
+      free(v->fmode);
       break;
 
     // free the memory allocated for the lval struct itself
@@ -303,6 +326,14 @@ lval* lval_copy(lval* v) {
         x->cell[i] = lval_copy(v->cell[i]);
       }
     break;
+
+    case LVAL_FILE:
+      x->file = v->file;
+      x->fname = malloc(strlen(v->fname) + 1);
+      strcpy(x->fname, v->fname);
+      x->fmode = malloc(strlen(v->fmode) + 1);
+      strcpy(x->fmode, v->fmode);
+      break;
   }
   return x;
 }
@@ -422,7 +453,9 @@ int lval_eq(lval* x, lval* y) {
         if (!lval_eq(x->cell[i], y->cell[i])) { return 0; }
       }
       return 1;
-    break;
+
+    case LVAL_FILE:
+      return strcmp(x->fname, y->fname) == 0;
   }
 
   // we should never get this far
@@ -637,6 +670,9 @@ void lval_print(lval* v) {
         lval_print(v->body);
         putchar(')');
       }
+      break;
+    case LVAL_FILE:
+      printf("<File[%s]: %s>", v->fmode, v->fname);
       break;
   }
 }
@@ -1153,6 +1189,17 @@ lval* builtin_read(lenv* e, lval* a) {
   }
 }
 
+lval* builtin_fopen(lenv* e, lval* a) {
+  LASSERT_NUM("fopen", a, 2);
+  LASSERT_TYPE("fopen", a, 0, LVAL_STR);
+  LASSERT_TYPE("fopen", a, 1, LVAL_STR);
+
+  char* filename = lval_pop(a, 0)->str;
+  char* mode = lval_take(a, 0)->str;
+
+  return lval_file(filename, mode);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -1420,6 +1467,9 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "and", builtin_and); // alias
   lenv_add_builtin(e, "!", builtin_not);
   lenv_add_builtin(e, "not", builtin_not); // alias
+
+  /* File operations */
+  lenv_add_builtin(e, "fopen", builtin_fopen);
 
   /* Variable/environment functions */
   lenv_add_builtin(e, "def", builtin_def);
