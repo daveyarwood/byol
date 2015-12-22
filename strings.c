@@ -1200,6 +1200,18 @@ lval* builtin_fopen(lenv* e, lval* a) {
   return lval_file(filename, mode);
 }
 
+lval* builtin_fclose(lenv* e, lval* a) {
+  LASSERT_NUM("fclose", a, 1);
+  LASSERT_TYPE("fclose", a, 0, LVAL_FILE);
+
+  FILE* file = lval_take(a, 0)->file;
+  if (fclose(file) == 0) {
+    return lval_ok();
+  } else {
+    return lval_err("Failed to close file.");
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -1470,6 +1482,7 @@ void lenv_add_builtins(lenv* e) {
 
   /* File operations */
   lenv_add_builtin(e, "fopen", builtin_fopen);
+  lenv_add_builtin(e, "fclose", builtin_fclose);
 
   /* Variable/environment functions */
   lenv_add_builtin(e, "def", builtin_def);
