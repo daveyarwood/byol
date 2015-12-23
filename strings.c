@@ -43,9 +43,9 @@ struct lenv;
 typedef struct lval lval;
 typedef struct lenv lenv;
 
-enum { LVAL_ERR, LVAL_LONG, LVAL_DBL, LVAL_BOOL, LVAL_SYM,
-       LVAL_STR, LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR, LVAL_OK,
-       LVAL_FILE };
+enum { LVAL_ERR, LVAL_LONG, LVAL_DBL, LVAL_BOOL,  LVAL_SYM,
+       LVAL_STR, LVAL_CHAR, LVAL_FN,  LVAL_SEXPR, LVAL_QEXPR,
+       LVAL_OK,  LVAL_FILE };
 
 typedef lval*(*lbuiltin)(lenv*, lval*);
 
@@ -59,6 +59,7 @@ struct lval {
   char* err;
   char* sym;
   char* str;
+  char* chr;
 
   /* Function */
   lbuiltin builtin; // when not NULL, this is a builtin fn
@@ -84,6 +85,7 @@ char* ltype_name(int t) {
     case LVAL_BOOL:  return "Boolean";
     case LVAL_SYM:   return "Symbol";
     case LVAL_STR:   return "String";
+    case LVAL_CHAR:  return "Character";
     case LVAL_FN:    return "Function";
     case LVAL_SEXPR: return "S-expression";
     case LVAL_QEXPR: return "Q-expression";
@@ -186,6 +188,17 @@ lval* lval_str(char* s) {
   return v;
 }
 
+// Dealing with pointers here instead of single characters so that we have some
+// flexibility in what can be considered a character. It might be nice to allow
+// multi-character Unicode characters, etc.
+lval* lval_char(char* c) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_CHAR;
+  v->chr  = malloc(strlen(c) + 1);
+  strcpy(v->chr, c);
+  return v;
+}
+
 lval* lval_sexpr(void) {
   lval* v  = malloc(sizeof(lval));
   v->type  = LVAL_SEXPR;
@@ -251,10 +264,11 @@ void lval_del(lval* v) {
         lval_del(v->body);
       }
       break;
-    // for errors, symbols and strings, free the string data
+    // for errors, symbols, strings, and characters, free the string data
     case LVAL_ERR: free(v->err); break;
     case LVAL_SYM: free(v->sym); break;
     case LVAL_STR: free(v->str); break;
+    case LVAL_CHAR: free(v->chr); break;
     // for S/Q-expressions, delete all the elements inside
     case LVAL_SEXPR:
     case LVAL_QEXPR:
@@ -315,6 +329,11 @@ lval* lval_copy(lval* v) {
     case LVAL_STR:
       x->str = malloc(strlen(v->str) + 1);
       strcpy(x->str, v->str);
+      break;
+
+    case LVAL_CHAR:
+      x->chr = malloc(strlen(v->chr) + 1);
+      strcpy(x->chr, v->chr);
       break;
 
     /* Copy lists by copying each sub-expression */
@@ -437,6 +456,9 @@ int lval_eq(lval* x, lval* y) {
 
     case LVAL_STR:
       return strcmp(x->str, y->str) == 0;
+
+    case LVAL_CHAR:
+      return strcmp(x->chr, y->chr) == 0;
 
     case LVAL_FN:
       if (x->builtin || y->builtin) {
@@ -647,6 +669,7 @@ void lenv_def(lenv* e, lval* k, lval* v) {
 ////////////////////////////////////////////////////////////////////////////////
 
 void lval_str_print(lval* v);
+void lval_char_print(lval* v);
 void lval_expr_print(lval* v, char open, char close);
 
 void lval_print(lval* v) {
@@ -658,6 +681,7 @@ void lval_print(lval* v) {
     case LVAL_ERR:   printf("Error: %s", v->err); break;
     case LVAL_SYM:   printf("%s", v->sym); break;
     case LVAL_STR:   lval_str_print(v); break;
+    case LVAL_CHAR:  lval_char_print(v); break;
     case LVAL_SEXPR: lval_expr_print(v, '(', ')'); break;
     case LVAL_QEXPR: lval_expr_print(v, '{', '}'); break;
     case LVAL_FN:
@@ -688,6 +712,11 @@ void lval_str_print(lval* v) {
   escaped = mpcf_escape(escaped);
   printf("\"%s\"", escaped);
   free(escaped);
+}
+
+void lval_char_print(lval* v) {
+  char c = v->chr[0];
+  printf("'%c'", c);
 }
 
 void lval_expr_print(lval* v, char open, char close) {
@@ -749,6 +778,10 @@ void lval_expr_print(lval* v, char open, char close) {
   LASSERT(args, args->cell[index]->count != 0, \
     "Empty Q-expression passed to '%s' as argument #%i.", fn, index + 1);
 
+#define LASSERT_NOT_EMPTY_STRING(fn, args, index) \
+  LASSERT(args, strcmp(args->cell[index]->str, "") != 0, \
+    "Empty string passed to '%s' as argument #%i.", fn, index + 1);
+
 // When given a Q-expression, returns a Q-expression containing the first
 // element in the list.
 //
@@ -759,7 +792,10 @@ lval* builtin_head(lenv* e, lval* a) {
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR ||
              a->cell[0]->type == LVAL_STR,
           "Incorrect type for argument #1 passed to 'head'. "
-          "Got %s, expected %s or %s.");
+          "Got %s, expected %s or %s.",
+          ltype_name(a->cell[0]->type),
+          ltype_name(LVAL_QEXPR),
+          ltype_name(LVAL_STR));
 
   if (a->cell[0]->type == LVAL_QEXPR) {
     LASSERT_NOT_EMPTY("head", a, 0);
@@ -769,21 +805,42 @@ lval* builtin_head(lenv* e, lval* a) {
     return qexp;
   }
 
+  LASSERT_NOT_EMPTY_STRING("head", a, 0);
+
   lval* str = lval_take(a, 0);
   str->str[1] = '\0';
   return str;
 }
 
 // Like head, but returns the element itself (not a Q-expression).
+//
+// When given a string, returns the first character.
 lval* builtin_first(lenv* e, lval* a) {
   LASSERT_NUM("first", a, 1);
-  LASSERT_TYPE("first", a, 0, LVAL_QEXPR);
-  LASSERT_NOT_EMPTY("first", a, 0);
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR ||
+             a->cell[0]->type == LVAL_STR,
+          "Incorrect type for argument #1 passed to 'first'. "
+          "Got %s, expected %s or %s.",
+          ltype_name(a->cell[0]->type),
+          ltype_name(LVAL_QEXPR),
+          ltype_name(LVAL_STR));
 
-  lval* v = lval_take(a, 0);
-  while (v->count > 1) { lval_del(lval_pop(v, 1)); }
-  v = lval_take(v, 0);
-  return v;
+  if (a->cell[0]->type == LVAL_QEXPR) {
+    LASSERT_NOT_EMPTY("first", a, 0);
+
+    lval* v = lval_take(a, 0);
+    while (v->count > 1) { lval_del(lval_pop(v, 1)); }
+    v = lval_take(v, 0);
+    return v;
+  }
+
+  LASSERT_NOT_EMPTY_STRING("first", a, 0);
+
+  lval* str = lval_take(a, 0);
+  str->str[1] = '\0';
+  lval* chr = lval_char(str->str);
+  lval_del(str);
+  return chr;
 }
 
 // When given a Q-expression, returns the tail of the list.
@@ -794,7 +851,10 @@ lval* builtin_tail(lenv* e, lval* a) {
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR ||
              a->cell[0]->type == LVAL_STR,
           "Incorrect type for argument #1 passed to 'tail'. "
-          "Got %s, expected %s or %s.");
+          "Got %s, expected %s or %s.",
+          ltype_name(a->cell[0]->type),
+          ltype_name(LVAL_QEXPR),
+          ltype_name(LVAL_STR));
 
   if (a->cell[0]->type == LVAL_QEXPR) {
     LASSERT_NOT_EMPTY("tail", a, 0);
@@ -803,6 +863,8 @@ lval* builtin_tail(lenv* e, lval* a) {
     lval_del(lval_pop(qexp, 0));
     return qexp;
   }
+
+  LASSERT_NOT_EMPTY_STRING("tail", a, 0);
 
   lval* str = lval_take(a, 0);
   memmove(str->str, str->str + 1, strlen(str->str));
@@ -1212,6 +1274,29 @@ lval* builtin_fclose(lenv* e, lval* a) {
   }
 }
 
+lval* builtin_getc(lenv* e, lval* a) {
+  LASSERT_NUM("getc", a, 1);
+  LASSERT_TYPE("getc", a, 0, LVAL_FILE);
+
+  FILE* file = lval_take(a, 0)->file;
+
+  if (file == NULL) {
+    return lval_err("Unable to read character from file.");
+  }
+
+  char c = getc(file);
+
+  if (c == '\0' || c == EOF) {
+    return lval_err("File closed or reached EOF.");
+  }
+
+  char s[2];
+  s[0] = c;
+  s[1] = '\0';
+  lval* chr = lval_char(s);
+  return chr;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -1483,6 +1568,7 @@ void lenv_add_builtins(lenv* e) {
   /* File operations */
   lenv_add_builtin(e, "fopen", builtin_fopen);
   lenv_add_builtin(e, "fclose", builtin_fclose);
+  lenv_add_builtin(e, "getc", builtin_getc);
 
   /* Variable/environment functions */
   lenv_add_builtin(e, "def", builtin_def);
