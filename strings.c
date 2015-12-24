@@ -716,7 +716,20 @@ void lval_str_print(lval* v) {
 
 void lval_char_print(lval* v) {
   char c = v->chr[0];
-  printf("'%c'", c);
+  switch (c) {
+    case '\'': printf("'\\''"); break;
+    case '"': printf("'\"'"); break;
+    case '\?': printf("'\\?'"); break;
+    case '\\': printf("'\\\\'"); break;
+    case '\a': printf("'\\a'"); break;
+    case '\b': printf("'\\b'"); break;
+    case '\f': printf("'\\f'"); break;
+    case '\n': printf("'\\n'"); break;
+    case '\r': printf("'\\r'"); break;
+    case '\t': printf("'\\t'"); break;
+    case '\v': printf("'\\v'"); break;
+    default: printf("'%c'", c);
+  }
 }
 
 void lval_expr_print(lval* v, char open, char close) {
