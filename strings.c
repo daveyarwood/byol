@@ -32,6 +32,7 @@ mpc_parser_t* Long;
 mpc_parser_t* Double;
 mpc_parser_t* Symbol;
 mpc_parser_t* String;
+mpc_parser_t* Char;
 mpc_parser_t* Comment;
 mpc_parser_t* Sexpr;
 mpc_parser_t* Qexpr;
@@ -1781,12 +1782,24 @@ lval* lval_read_str(mpc_ast_t* t) {
   return str;
 }
 
+lval* lval_read_char(mpc_ast_t* t) {
+  /* Cut off the final single-quote character */
+  t->contents[strlen(t->contents) - 1] = '\0';
+  /* Copy the string starting after the initial single-quote character */
+  char* unescaped = malloc(strlen(t->contents + 1) + 1);
+  strcpy(unescaped, t->contents + 1);
+  unescaped = mpcf_unescape(unescaped);
+  lval* chr = lval_char(unescaped);
+  free(unescaped);
+  return chr;
+}
+
 lval* lval_read(mpc_ast_t* t) {
-  // for numbers and symbols, return conversion to that type
   if (strstr(t->tag, "long"))   { return lval_read_long(t);     }
   if (strstr(t->tag, "double")) { return lval_read_double(t);   }
   if (strstr(t->tag, "symbol")) { return lval_sym(t->contents); }
   if (strstr(t->tag, "string")) { return lval_read_str(t); }
+  if (strstr(t->tag, "char"))   { return lval_read_char(t); }
 
   // if root (>), read every child as an expression and return a single
   // Q-expression containing all of the expressions
@@ -1844,6 +1857,7 @@ int main(int argc, char** argv) {
   Double  = mpc_new("double");
   Symbol  = mpc_new("symbol");
   String  = mpc_new("string");
+  Char    = mpc_new("char");
   Comment = mpc_new("comment");
   Sexpr   = mpc_new("sexpr");
   Qexpr   = mpc_new("qexpr");
@@ -1856,14 +1870,15 @@ int main(int argc, char** argv) {
       double  : /-?[0-9]+\\.[0-9]+/ ;                                          \
       symbol  : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!\\?&%\\|]+/ ;                      \
       string  : /\"(\\\\.|[^\"])*\"/ ;                                         \
+      char    : /'(\\\\.|[^'])'/ ;                                               \
       comment : /;[^\\r\\n]*/ ;                                                \
       sexpr   : '(' <expr>* ')' ;                                              \
       qexpr   : '{' <expr>* '}' ;                                              \
-      expr    : <double>  | <long>  | <symbol> | <string>                      \
-              | <comment> | <sexpr> | <qexpr> ;                                \
+      expr    : <double> | <long>    | <symbol> | <string>                     \
+              | <char>   | <comment> | <sexpr>  | <qexpr> ;                    \
       lispy   : /^/ <expr>* /$/ ;                                              \
     ",
-    Long, Double, Symbol, String, Comment, Sexpr, Qexpr, Expr, Lispy);
+    Long, Double, Symbol, String, Char, Comment, Sexpr, Qexpr, Expr, Lispy);
 
   lenv* e = lenv_new();
   lenv_add_builtins(e);
@@ -1905,7 +1920,7 @@ int main(int argc, char** argv) {
   }
 
   lenv_del(e);
-  mpc_cleanup(9, Long,  Double, Symbol, String, Comment,
-                 Sexpr, Qexpr,  Expr,   Lispy);
+  mpc_cleanup(10, Long,    Double, Symbol, String, Char,
+                  Comment, Sexpr,  Qexpr,  Expr,   Lispy);
   return 0;
 }
