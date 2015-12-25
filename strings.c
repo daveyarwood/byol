@@ -1311,6 +1311,24 @@ lval* builtin_getc(lenv* e, lval* a) {
   return chr;
 }
 
+lval* builtin_putc(lenv* e, lval* a) {
+  LASSERT_NUM("putc", a, 2);
+  LASSERT_TYPE("putc", a, 0, LVAL_FILE);
+  LASSERT_TYPE("putc", a, 1, LVAL_CHAR);
+
+  FILE* file = lval_pop(a, 0)->file;
+  char* s = lval_take(a, 0)->chr;
+  char c = s[0];
+
+  int result = putc(c, file);
+
+  if (result == EOF) {
+    return lval_err("Unable to write character to file.");
+  } else {
+    return lval_ok();
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -1583,6 +1601,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "fopen", builtin_fopen);
   lenv_add_builtin(e, "fclose", builtin_fclose);
   lenv_add_builtin(e, "getc", builtin_getc);
+  lenv_add_builtin(e, "putc", builtin_putc);
 
   /* Variable/environment functions */
   lenv_add_builtin(e, "def", builtin_def);
