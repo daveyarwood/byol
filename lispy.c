@@ -961,6 +961,16 @@ lval* builtin_cons(lenv* e, lval* a) {
   return x;
 }
 
+lval* builtin_conj(lenv* e, lval* a) {
+  LASSERT_NUM("conj", a, 2);
+  LASSERT_TYPE("conj", a, 0, LVAL_QEXPR);
+
+  lval* coll = lval_pop(a, 0);
+  lval* x = lval_take(a, 0);
+
+  return lval_conj(coll, x);
+}
+
 lval* builtin_len(lenv* e, lval* a) {
   LASSERT_NUM("len", a, 1);
   LASSERT_TYPE("len", a, 0, LVAL_QEXPR);
@@ -1721,6 +1731,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "init", builtin_init);
   lenv_add_builtin(e, "list", builtin_list);
   lenv_add_builtin(e, "cons", builtin_cons);
+  lenv_add_builtin(e, "conj", builtin_conj);
   lenv_add_builtin(e, "join", builtin_join);
   lenv_add_builtin(e, "eval", builtin_eval);
   lenv_add_builtin(e, "len",  builtin_len);
