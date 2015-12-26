@@ -5,6 +5,31 @@
 (def\ {apply f xs}
   {eval (join (list f) xs)})
 
+(def\ {empty? coll}
+  {== (len coll) 0})
+
+(def\ {take n coll}
+  {if (or (== n 0) (empty? coll))
+    {}
+    {join (head coll)
+          (take (- n 1) (tail coll))}})
+
+(def\ {drop n coll}
+  {if (or (== n 0) (empty? coll))
+    {do coll}
+    {drop (- n 1) (tail coll)}})
+
+(def\ {split i coll}
+  {list (take i coll) (drop i coll)})
+
+(def\ {flip f x y}
+  {eval {f y x}})
+
+(def\ {reverse coll}
+  {if (empty? coll)
+    {}
+    {join (reverse (tail coll)) (head coll)}})
+
 (def\ {nth coll n}
   {if (== n 0)
     {first coll}
@@ -17,18 +42,40 @@
 
 (def\ {last coll} {first (reverse coll)})
 
-(def\ {flip f x y}
-  {eval {f y x}})
-
-(def\ {reverse coll}
-  {if (== coll {})
-    {}
-    {join (reverse (tail coll)) (head coll)}})
-
 (def\ {contains? coll x}
-  {if (== (len coll) 0)
+  {if (empty? coll)
     false
     {if (== (first coll) x)
       true
       {contains? (rest coll) x}}})
+
+(def\ {do & xs}
+  {if (empty? xs)
+    {}
+    {last xs}})
+
+(def\ {map f coll}
+  {if (empty? coll)
+    {}
+    {join (list (f (first coll)))
+          (map f (tail coll))}})
+
+(def\ {filter pred coll}
+  {if (empty? coll)
+    {}
+    {join (if (pred (first coll))
+            {head coll}
+            {})
+          (filter pred (tail coll))}})
+
+(def\ {foldl f acc coll}
+  {if (empty? coll)
+    {do acc}
+    {foldl f (f acc (first coll)) (tail coll)}})
+
+(def\ {sum coll}
+  {foldl + 0 coll})
+
+(def\ {product coll}
+  {foldl * 1 coll})
 
