@@ -1394,6 +1394,28 @@ lval* builtin_fseek(lenv* e, lval* a) {
   }
 }
 
+lval* builtin_ftell(lenv* e, lval* a) {
+  LASSERT_NUM("ftell", a, 1);
+  LASSERT_TYPE("ftell", a, 0, LVAL_FILE);
+
+  lval* f = lval_take(a, 0);
+  FILE* file = f->file;
+  lval_del(f);
+
+  if (file == NULL) {
+    return lval_err("Unable to read file.");
+  }
+
+  errno = 0;
+  int pos = ftell(file);
+
+  if (errno) {
+    return lval_err("Unable to determine file position.");
+  }
+
+  return lval_long(pos);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -1671,6 +1693,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "getc", builtin_getc);
   lenv_add_builtin(e, "putc", builtin_putc);
   lenv_add_builtin(e, "fseek", builtin_fseek);
+  lenv_add_builtin(e, "ftell", builtin_ftell);
 
   /* Variable/environment functions */
   lenv_add_builtin(e, "def", builtin_def);
