@@ -1334,6 +1334,36 @@ lval* builtin_putc(lenv* e, lval* a) {
   }
 }
 
+lval* builtin_fseek(lenv* e, lval* a) {
+  LASSERT_NUM("fseek", a, 3);
+  LASSERT_TYPE("fseek", a, 0, LVAL_FILE);
+  LASSERT_TYPE("fseek", a, 1, LVAL_LONG);
+  LASSERT_TYPE("fseek", a, 2, LVAL_LONG);
+
+  FILE* file = lval_pop(a, 0)->file;
+  lval* o = lval_pop(a, 0);
+  lval* fw = lval_pop(a, 0);
+  long offset = o->lng;
+  int fromWhere = fw->lng;
+
+  LASSERT(a, fromWhere == 0 || fromWhere == 1 || fromWhere == 2,
+          "Unexpected value at argument #3 to 'fseek'. Got %i; expected "
+          "0 (from beginning), 1 (from current position), or 2 (from end).",
+          fromWhere);
+
+  lval_del(o);
+  lval_del(fw);
+  lval_del(a);
+
+  int error = fseek(file, offset, fromWhere);
+
+  if (error) {
+    return lval_err("Unable to seek in file.");
+  } else {
+    return lval_ok();
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -1550,12 +1580,15 @@ lval* builtin_max(lenv* e, lval* a) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void lenv_add_builtin(lenv* e, char* name, lbuiltin builtin) {
+void lenv_add_value(lenv* e, char* name, lval* v) {
   lval* k = lval_sym(name);
-  lval* v = lval_fn(builtin);
   lenv_put(e, k, v);
   lval_del(k);
   lval_del(v);
+}
+
+void lenv_add_builtin(lenv* e, char* name, lbuiltin builtin) {
+  lenv_add_value(e, name, lval_fn(builtin));
 }
 
 void lenv_add_builtins(lenv* e) {
@@ -1607,6 +1640,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "fclose", builtin_fclose);
   lenv_add_builtin(e, "getc", builtin_getc);
   lenv_add_builtin(e, "putc", builtin_putc);
+  lenv_add_builtin(e, "fseek", builtin_fseek);
 
   /* Variable/environment functions */
   lenv_add_builtin(e, "def", builtin_def);
