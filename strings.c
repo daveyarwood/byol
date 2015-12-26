@@ -1237,6 +1237,8 @@ lval* builtin_show(lenv* e, lval* a) {
   lval* str = lval_take(a, 0);
   printf("%s\n", str->str);
 
+  lval_del(str);
+
   return lval_ok();
 }
 
@@ -1380,6 +1382,32 @@ lval* builtin_fgets(lenv* e, lval* a) {
     return lval_str(str);
   } else {
     return lval_err("Already at the end of the file, or some error occurred.");
+  }
+}
+
+lval* builtin_fputs(lenv* e, lval* a) {
+  LASSERT_NUM("fputs", a, 2);
+  LASSERT_TYPE("fputs", a, 0, LVAL_FILE);
+  LASSERT_TYPE("fputs", a, 1, LVAL_STR);
+
+  lval* f = lval_pop(a, 0);
+  FILE* file = f->file;
+  lval_del(f);
+
+  if (file == NULL) {
+    lval_del(a);
+    return lval_err("Unable to open file.");
+  }
+
+  lval* s = lval_take(a, 0);
+  char* str = malloc(strlen(s->str) + 1);
+  strcpy(str, s->str);
+  lval_del(s);
+
+  if (fputs(str, file) == EOF) {
+    return lval_err("Unable to write string to file.");
+  } else {
+    return lval_ok();
   }
 }
 
@@ -1734,6 +1762,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "getc", builtin_getc);
   lenv_add_builtin(e, "putc", builtin_putc);
   lenv_add_builtin(e, "fgets", builtin_fgets);
+  lenv_add_builtin(e, "fputs", builtin_fputs);
   lenv_add_builtin(e, "fseek", builtin_fseek);
   lenv_add_builtin(e, "ftell", builtin_ftell);
   lenv_add_builtin(e, "rewind", builtin_rewind);
