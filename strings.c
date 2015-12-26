@@ -1416,6 +1416,22 @@ lval* builtin_ftell(lenv* e, lval* a) {
   return lval_long(pos);
 }
 
+lval* builtin_rewind(lenv* e, lval* a) {
+  LASSERT_NUM("rewind", a, 1);
+  LASSERT_TYPE("rewind", a, 0, LVAL_FILE);
+
+  lval* f = lval_take(a, 0);
+  FILE* file = f->file;
+  lval_del(f);
+
+  if (file == NULL) {
+    return lval_err("Unable to read file.");
+  }
+
+  rewind(file);
+  return lval_ok();
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -1694,6 +1710,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "putc", builtin_putc);
   lenv_add_builtin(e, "fseek", builtin_fseek);
   lenv_add_builtin(e, "ftell", builtin_ftell);
+  lenv_add_builtin(e, "rewind", builtin_rewind);
 
   /* Variable/environment functions */
   lenv_add_builtin(e, "def", builtin_def);
