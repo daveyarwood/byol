@@ -1370,15 +1370,19 @@ lval* builtin_fseek(lenv* e, lval* a) {
   FILE* file = f->file;
   long offset = o->lng;
   int fromWhere = fw->lng;
+  lval_del(f);
+  lval_del(o);
+  lval_del(fw);
+
+  if (file == NULL) {
+    return lval_err("Unable to read file.");
+  }
 
   LASSERT(a, fromWhere == 0 || fromWhere == 1 || fromWhere == 2,
           "Unexpected value at argument #3 to 'fseek'. Got %i; expected "
           "0 (from beginning), 1 (from current position), or 2 (from end).",
           fromWhere);
 
-  lval_del(f);
-  lval_del(o);
-  lval_del(fw);
   lval_del(a);
 
   int error = fseek(file, offset, fromWhere);
