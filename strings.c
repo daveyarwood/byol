@@ -1358,6 +1358,31 @@ lval* builtin_putc(lenv* e, lval* a) {
   }
 }
 
+lval* builtin_fgets(lenv* e, lval* a) {
+  LASSERT_NUM("fgets", a, 2);
+  LASSERT_TYPE("fgets", a, 0, LVAL_FILE);
+  LASSERT_TYPE("fgets", a, 1, LVAL_LONG);
+
+  lval* f = lval_pop(a, 0);
+  lval* l = lval_take(a, 0);
+  FILE* file = f->file;
+  long n = l->lng;
+
+  lval_del(f);
+  lval_del(l);
+
+  if (file == NULL) {
+    return lval_err("Unable to open file.");
+  }
+
+  char str[n];
+  if (fgets(str, n, file) != NULL) {
+    return lval_str(str);
+  } else {
+    return lval_err("Already at the end of the file, or some error occurred.");
+  }
+}
+
 lval* builtin_fseek(lenv* e, lval* a) {
   LASSERT_NUM("fseek", a, 3);
   LASSERT_TYPE("fseek", a, 0, LVAL_FILE);
@@ -1708,6 +1733,7 @@ void lenv_add_builtins(lenv* e) {
   lenv_add_builtin(e, "fclose", builtin_fclose);
   lenv_add_builtin(e, "getc", builtin_getc);
   lenv_add_builtin(e, "putc", builtin_putc);
+  lenv_add_builtin(e, "fgets", builtin_fgets);
   lenv_add_builtin(e, "fseek", builtin_fseek);
   lenv_add_builtin(e, "ftell", builtin_ftell);
   lenv_add_builtin(e, "rewind", builtin_rewind);
