@@ -1295,13 +1295,18 @@ lval* builtin_getc(lenv* e, lval* a) {
   FILE* file = lval_take(a, 0)->file;
 
   if (file == NULL) {
-    return lval_err("Unable to read character from file.");
+    return lval_err("Unable to read file.");
   }
 
   char c = getc(file);
 
-  if (c == '\0' || c == EOF) {
-    return lval_err("File closed or reached EOF.");
+  if (c == EOF) {
+    if (feof(file)) {
+      return lval_err("File closed or reached end of file.");
+    }
+    else {
+      return lval_err("Unable to read character from file.");
+    }
   }
 
   char s[2];
