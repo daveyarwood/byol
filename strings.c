@@ -227,8 +227,15 @@ lval* lval_file(char* filename, char* mode) {
   lval* v  = malloc(sizeof(lval));
   v->type  = LVAL_FILE;
   v->file  = fopen(filename, mode);
+
   v->fname = filename;
+  v->fname = malloc(strlen(filename) + 1);
+  strcpy(v->fname, filename);
+
   v->fmode = mode;
+  v->fmode = malloc(strlen(mode) + 1);
+  strcpy(v->fmode, mode);
+
   return v;
 }
 
@@ -1168,8 +1175,7 @@ lval* builtin_lambda(lenv* e, lval* a) {
 }
 
 lval* builtin_exit(lenv* e, lval* a) {
-  printf("Adiós!");
-  putchar('\n');
+  printf("\nAdiós!\n");
   exit(0);
 
   // have to return an lval* here to appease the compiler
@@ -1270,21 +1276,32 @@ lval* builtin_fopen(lenv* e, lval* a) {
   LASSERT_TYPE("fopen", a, 0, LVAL_STR);
   LASSERT_TYPE("fopen", a, 1, LVAL_STR);
 
-  char* filename = lval_pop(a, 0)->str;
-  char* mode = lval_take(a, 0)->str;
+  lval* f = lval_pop(a, 0);
+  lval* m = lval_pop(a, 0);
+  char* filename = f->str;
+  char* mode = m->str;
 
-  return lval_file(filename, mode);
+  lval* file = lval_file(filename, mode);
+  lval_del(f);
+  lval_del(m);
+  return file;
 }
 
 lval* builtin_fclose(lenv* e, lval* a) {
   LASSERT_NUM("fclose", a, 1);
   LASSERT_TYPE("fclose", a, 0, LVAL_FILE);
 
-  FILE* file = lval_take(a, 0)->file;
-  if (fclose(file) == 0) {
-    return lval_ok();
-  } else {
+  lval* f = lval_take(a, 0);
+  FILE* file = f->file;
+
+  int error = fclose(file);
+
+  lval_del(f);
+
+  if (error) {
     return lval_err("Failed to close file.");
+  } else {
+    return lval_ok();
   }
 }
 
@@ -1292,7 +1309,9 @@ lval* builtin_getc(lenv* e, lval* a) {
   LASSERT_NUM("getc", a, 1);
   LASSERT_TYPE("getc", a, 0, LVAL_FILE);
 
-  FILE* file = lval_take(a, 0)->file;
+  lval* f = lval_take(a, 0);
+  FILE* file = f->file;
+  lval_del(f);
 
   if (file == NULL) {
     return lval_err("Unable to read file.");
@@ -1321,11 +1340,16 @@ lval* builtin_putc(lenv* e, lval* a) {
   LASSERT_TYPE("putc", a, 0, LVAL_FILE);
   LASSERT_TYPE("putc", a, 1, LVAL_CHAR);
 
-  FILE* file = lval_pop(a, 0)->file;
-  char* s = lval_take(a, 0)->chr;
-  char c = s[0];
+  lval* f = lval_pop(a, 0);
+  FILE* file = f->file;
+  lval* c = lval_take(a, 0);
+  char* s = c->chr;
+  char ch = s[0];
 
-  int result = putc(c, file);
+  int result = putc(ch, file);
+
+  lval_del(f);
+  lval_del(c);
 
   if (result == EOF) {
     return lval_err("Unable to write character to file.");
@@ -1340,9 +1364,10 @@ lval* builtin_fseek(lenv* e, lval* a) {
   LASSERT_TYPE("fseek", a, 1, LVAL_LONG);
   LASSERT_TYPE("fseek", a, 2, LVAL_LONG);
 
-  FILE* file = lval_pop(a, 0)->file;
+  lval* f = lval_pop(a, 0);
   lval* o = lval_pop(a, 0);
   lval* fw = lval_pop(a, 0);
+  FILE* file = f->file;
   long offset = o->lng;
   int fromWhere = fw->lng;
 
@@ -1351,6 +1376,7 @@ lval* builtin_fseek(lenv* e, lval* a) {
           "0 (from beginning), 1 (from current position), or 2 (from end).",
           fromWhere);
 
+  lval_del(f);
   lval_del(o);
   lval_del(fw);
   lval_del(a);
